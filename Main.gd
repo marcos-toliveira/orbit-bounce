@@ -1,10 +1,8 @@
 extends Node2D
 
 # ==============================================================================
-# ORBIT BOUNCE (PONG CIRCULAR) - EVOLUTION 4.0
-# Sistema de Som Procedural (Sintetizado via Código - Zero Assets Externos)
-# Power-ups & Debuffs: Raquete Gigante, Gosma/Veneno Encolhedor, Bola de Fogo 🔥
-# Torre Central Atiradora (Boss/Hazard) + Projéteis com Dano e Desvio
+# ORBIT BOUNCE (PONG CIRCULAR) - EVOLUTION 5.0
+# Etapa 1: Economia, Persistência, Loja de Skins Cosméticas & Rewarded Ad Loop
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
@@ -79,7 +77,7 @@ class HelixObstacle:
 class SpecialOrb:
 	var pos: Vector2
 	var radius: float = 17.0
-	var type: String # "multiball", "expand", "poison", "fireball"
+	var type: String
 	var pulse_time: float = 0.0
 
 class TurretBullet:
@@ -168,8 +166,10 @@ const STAGE_CONFIGS = [
 ]
 
 # ------------------------------------------------------------------------------
-# 4. VARIÁVEIS DE ESTADO
+# 4. VARIÁVEIS DE ESTADO E PERSISTÊNCIA
 # ------------------------------------------------------------------------------
+const SAVE_PATH = "user://orbit_bounce_save.json"
+
 enum GameState { PLAYING, GAME_OVER, CAMPAIGN_CLEAR }
 var current_state: GameState = GameState.PLAYING
 
@@ -178,11 +178,21 @@ var paddle_angle: float = -PI / 2.0
 var target_paddle_angle: float = -PI / 2.0
 var is_dragging: bool = false
 
-# Modificadores da Raquete
+# Persistência do Jogador
+var total_coins_bank: int = 0
+var high_score: int = 0
+var unlocked_skins: Array = ["classic"]
+var equipped_skin: String = "classic"
+
+# Modificadores da Partida
 var paddle_arc_current: float = 54.0
 var paddle_buff_timer: float = 0.0
-var paddle_buff_type: String = "normal" # "normal", "expand", "poison"
+var paddle_buff_type: String = "normal"
 var paddle_stun_timer: float = 0.0
+var revive_shield_timer: float = 0.0
+var has_revived_this_run: bool = false
+var has_doubled_coins_this_run: bool = false
+var run_coins_collected: int = 0
 
 # Entidades ativas
 var balls: Array[Ball] = []
@@ -217,37 +227,96 @@ var sfx_gameover: AudioStreamWAV
 @onready var wave_label: Label = $HUD/TopBar/VBoxContainer/HBoxContainer/WaveLabel
 @onready var score_label: Label = $HUD/TopBar/VBoxContainer/HBoxContainer/ScoreLabel
 @onready var coins_label: Label = $HUD/TopBar/VBoxContainer/HBoxContainer/CoinsLabel
+@onready var top_shop_button: Button = $HUD/TopBar/VBoxContainer/HBoxContainer/TopShopButton
 @onready var objective_label: Label = $HUD/TopBar/VBoxContainer/ObjectiveLabel
 @onready var stage_progress_bar: ProgressBar = $HUD/TopBar/VBoxContainer/StageProgressBar
 @onready var wave_banner: Label = $HUD/WaveBanner
+
+# UI Game Over & Rewarded
 @onready var game_over_panel: PanelContainer = $HUD/GameOverPanel
 @onready var final_score_label: Label = $HUD/GameOverPanel/MarginContainer/VBoxContainer/FinalScoreLabel
+@onready var high_score_label: Label = $HUD/GameOverPanel/MarginContainer/VBoxContainer/HighScoreLabel
 @onready var waves_cleared_label: Label = $HUD/GameOverPanel/MarginContainer/VBoxContainer/WavesClearedLabel
+@onready var revive_button: Button = $HUD/GameOverPanel/MarginContainer/VBoxContainer/ReviveButton
+@onready var double_coins_button: Button = $HUD/GameOverPanel/MarginContainer/VBoxContainer/DoubleCoinsButton
+@onready var game_over_shop_button: Button = $HUD/GameOverPanel/MarginContainer/VBoxContainer/GameOverShopButton
 @onready var restart_button: Button = $HUD/GameOverPanel/MarginContainer/VBoxContainer/RestartButton
+
+# UI Loja de Skins
+@onready var shop_panel: PanelContainer = $HUD/ShopPanel
+@onready var shop_coins_label: Label = $HUD/ShopPanel/MarginContainer/VBoxContainer/ShopCoinsLabel
+@onready var skin_classic_btn: Button = $HUD/ShopPanel/MarginContainer/VBoxContainer/SkinClassicBtn
+@onready var skin_fire_btn: Button = $HUD/ShopPanel/MarginContainer/VBoxContainer/SkinFireBtn
+@onready var skin_synth_btn: Button = $HUD/ShopPanel/MarginContainer/VBoxContainer/SkinSynthBtn
+@onready var skin_rainbow_btn: Button = $HUD/ShopPanel/MarginContainer/VBoxContainer/SkinRainbowBtn
+@onready var close_shop_button: Button = $HUD/ShopPanel/MarginContainer/VBoxContainer/CloseShopButton
+
+# UI Vitória
 @onready var victory_panel: PanelContainer = $HUD/VictoryPanel
 @onready var total_score_label: Label = $HUD/VictoryPanel/MarginContainer/VBoxContainer/TotalScoreLabel
 @onready var infinite_button: Button = $HUD/VictoryPanel/MarginContainer/VBoxContainer/InfiniteButton
 
 # ------------------------------------------------------------------------------
-# 5. INICIALIZAÇÃO & SISTEMA DE SOM PROCEDURAL SINTETIZADO
+# 5. INICIALIZAÇÃO & PERSISTÊNCIA
 # ------------------------------------------------------------------------------
 func _ready() -> void:
 	_init_procedural_audio()
 	_update_center_pos()
 	get_viewport().size_changed.connect(_update_center_pos)
+
+	_load_profile()
+
+	# Conexões de Botões
 	restart_button.pressed.connect(start_new_campaign)
 	infinite_button.pressed.connect(start_infinite_mode)
+	revive_button.pressed.connect(_on_revive_pressed)
+	double_coins_button.pressed.connect(_on_double_coins_pressed)
+	top_shop_button.pressed.connect(_open_shop)
+	game_over_shop_button.pressed.connect(_open_shop)
+	close_shop_button.pressed.connect(_close_shop)
+
+	skin_classic_btn.pressed.connect(func(): _select_skin("classic", 0))
+	skin_fire_btn.pressed.connect(func(): _select_skin("fire", 40))
+	skin_synth_btn.pressed.connect(func(): _select_skin("synth", 70))
+	skin_rainbow_btn.pressed.connect(func(): _select_skin("rainbow", 120))
+
 	start_new_campaign()
 
 func _update_center_pos() -> void:
 	arena_center = get_viewport_rect().size / 2.0
 
+func _save_profile() -> void:
+	var data = {
+		"total_coins_bank": total_coins_bank,
+		"high_score": high_score,
+		"unlocked_skins": unlocked_skins,
+		"equipped_skin": equipped_skin
+	}
+	var file = FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	if file:
+		file.store_string(JSON.stringify(data))
+
+func _load_profile() -> void:
+	if not FileAccess.file_exists(SAVE_PATH):
+		return
+	var file = FileAccess.open(SAVE_PATH, FileAccess.READ)
+	if file:
+		var json = JSON.new()
+		if json.parse(file.get_as_text()) == OK and typeof(json.data) == TYPE_DICTIONARY:
+			var d = json.data
+			total_coins_bank = int(d.get("total_coins_bank", 0))
+			high_score = int(d.get("high_score", 0))
+			unlocked_skins = Array(d.get("unlocked_skins", ["classic"]))
+			equipped_skin = String(d.get("equipped_skin", "classic"))
+
+# ------------------------------------------------------------------------------
+# 6. SISTEMA DE SOM PROCEDURAL SINTETIZADO
+# ------------------------------------------------------------------------------
 func _init_procedural_audio() -> void:
 	audio_player = AudioStreamPlayer.new()
 	audio_player.max_polyphony = 6
 	add_child(audio_player)
 
-	# Sintetiza as formas de onda 8-bit em memória (Zero arquivos externos!)
 	sfx_bounce = _synth_tone(320.0, 580.0, 0.08, "sine")
 	sfx_brick = _synth_tone(420.0, 160.0, 0.07, "square")
 	sfx_coin = _synth_arpeggio([880.0, 1320.0], 0.10)
@@ -284,7 +353,6 @@ func _synth_tone(f_start: float, f_end: float, duration: float, wave_type: Strin
 		elif wave_type == "noise":
 			val = (sin(phase) * 0.4) + randf_range(-0.5, 0.5)
 
-		# Envelope de volume (fade out rápido)
 		var env: float = 1.0 - t
 		val = clampf(val * env, -1.0, 1.0)
 		data[i] = int((val * 0.5 + 0.5) * 255.0)
@@ -319,7 +387,98 @@ func _synth_arpeggio(notes: Array, total_dur: float) -> AudioStreamWAV:
 	return wav
 
 # ------------------------------------------------------------------------------
-# 6. GERENCIAMENTO DE CAMPANHA & FASES
+# 7. LOJA DE SKINS & SISTEMA REWARDED (REVIVER & DOBRAR MOEDAS)
+# ------------------------------------------------------------------------------
+func _open_shop() -> void:
+	_update_shop_ui()
+	shop_panel.visible = true
+
+func _close_shop() -> void:
+	shop_panel.visible = false
+
+func _update_shop_ui() -> void:
+	shop_coins_label.text = "Saldo Total: 🪙 %d" % (total_coins_bank + coins)
+	
+	_configure_skin_button(skin_classic_btn, "classic", "🔵 Ciano Clássico", 0)
+	_configure_skin_button(skin_fire_btn, "fire", "🔥 Fogo Solar", 40)
+	_configure_skin_button(skin_synth_btn, "synth", "🌸 Synthwave Rosa", 70)
+	_configure_skin_button(skin_rainbow_btn, "rainbow", "🌈 Arco-Íris Cósmico", 120)
+
+func _configure_skin_button(btn: Button, skin_id: String, skin_title: String, cost: int) -> void:
+	var is_unlocked = unlocked_skins.has(skin_id)
+	var is_equipped = (equipped_skin == skin_id)
+
+	if is_equipped:
+		btn.text = "%s [EQUIPADO ✅]" % skin_title
+		btn.disabled = true
+	elif is_unlocked:
+		btn.text = "%s [EQUIPAR]" % skin_title
+		btn.disabled = false
+	else:
+		btn.text = "%s (🪙 %d)" % [skin_title, cost]
+		btn.disabled = (total_coins_bank + coins < cost)
+
+func _select_skin(skin_id: String, cost: int) -> void:
+	var available_coins = total_coins_bank + coins
+
+	if unlocked_skins.has(skin_id):
+		equipped_skin = skin_id
+		_play_sfx(sfx_powerup)
+	elif available_coins >= cost:
+		if coins >= cost:
+			coins -= cost
+		else:
+			var remaining_cost = cost - coins
+			coins = 0
+			total_coins_bank -= remaining_cost
+
+		unlocked_skins.append(skin_id)
+		equipped_skin = skin_id
+		_play_sfx(sfx_coin)
+		_trigger_firework(arena_center, Color(1.0, 0.85, 0.2), 30)
+
+	_save_profile()
+	_update_shop_ui()
+	_update_hud()
+	queue_redraw()
+
+func _on_revive_pressed() -> void:
+	if has_revived_this_run:
+		return
+
+	has_revived_this_run = true
+	game_over_panel.visible = false
+	current_state = GameState.PLAYING
+
+	# Spawna a bolinha de volta no centro com escudo protetor!
+	_spawn_ball(arena_center, randf() * TAU, ball_base_speed)
+	revive_shield_timer = 2.8 # 2.8 segundos de barreira protetora
+	paddle_arc_current = paddle_base_arc_degrees
+	paddle_buff_type = "normal"
+	paddle_stun_timer = 0.0
+
+	_play_sfx(sfx_powerup)
+	_trigger_firework(arena_center, Color(0.2, 1.0, 0.5), 40)
+	_show_wave_banner("REVIVIDO! ESCUDO ATIVO! 🛡️")
+
+func _on_double_coins_pressed() -> void:
+	if has_doubled_coins_this_run:
+		return
+
+	has_doubled_coins_this_run = true
+	var bonus_coins = run_coins_collected
+	coins += bonus_coins
+	total_coins_bank += bonus_coins
+	_save_profile()
+
+	double_coins_button.text = "DOBRADO! (🪙 +%d) ✅" % bonus_coins
+	double_coins_button.disabled = true
+	final_score_label.text = "Pontuação: %d  |  Moedas: %d" % [score, coins]
+	_play_sfx(sfx_coin)
+	_trigger_firework(arena_center, Color(1.0, 0.85, 0.2), 30)
+
+# ------------------------------------------------------------------------------
+# 8. CICLO DE PARTIDA
 # ------------------------------------------------------------------------------
 func _get_current_palette() -> Dictionary:
 	var cfg = _get_current_config()
@@ -335,10 +494,21 @@ func start_new_campaign() -> void:
 	current_state = GameState.PLAYING
 	game_over_panel.visible = false
 	victory_panel.visible = false
+	shop_panel.visible = false
 	wave_banner.visible = false
 
 	score = 0
 	coins = 0
+	run_coins_collected = 0
+	has_revived_this_run = false
+	has_doubled_coins_this_run = false
+	revive_shield_timer = 0.0
+
+	revive_button.text = "📺 REVIVER PARTIDA (1x)"
+	revive_button.disabled = false
+	double_coins_button.text = "🪙 2x MOEDAS DA PARTIDA"
+	double_coins_button.disabled = false
+
 	current_stage_idx = 0
 	paddle_angle = -PI / 2.0
 	target_paddle_angle = paddle_angle
@@ -372,7 +542,6 @@ func _load_stage(stage_idx: int) -> void:
 	var palette = cfg["palette"]
 	var blk_size = Vector2(28, 28)
 
-	# Configura torre se a fase pedir
 	if cfg["has_turret"]:
 		turret = TurretBoss.new()
 		turret.pos = arena_center
@@ -472,10 +641,10 @@ func _show_wave_banner(text: String) -> void:
 	tween.tween_callback(func(): wave_banner.visible = false)
 
 # ------------------------------------------------------------------------------
-# 7. ENTRADAS DE DADOS
+# 9. ENTRADAS DE DADOS
 # ------------------------------------------------------------------------------
 func _unhandled_input(event: InputEvent) -> void:
-	if current_state != GameState.PLAYING:
+	if current_state != GameState.PLAYING or shop_panel.visible:
 		return
 
 	if event is InputEventScreenTouch:
@@ -497,10 +666,10 @@ func _aim_at(screen_pos: Vector2) -> void:
 		target_paddle_angle = diff.angle()
 
 # ------------------------------------------------------------------------------
-# 8. FÍSICA E PROCESSAMENTO
+# 10. FÍSICA E PROCESSAMENTO
 # ------------------------------------------------------------------------------
 func _physics_process(delta: float) -> void:
-	if current_state != GameState.PLAYING:
+	if current_state != GameState.PLAYING or shop_panel.visible:
 		return
 
 	_process_modifiers(delta)
@@ -524,6 +693,9 @@ func _physics_process(delta: float) -> void:
 	queue_redraw()
 
 func _process_modifiers(delta: float) -> void:
+	if revive_shield_timer > 0.0:
+		revive_shield_timer -= delta
+
 	if paddle_buff_timer > 0.0:
 		paddle_buff_timer -= delta
 		if paddle_buff_timer <= 0.0:
@@ -543,7 +715,6 @@ func _process_turret(delta: float) -> void:
 
 	if turret.shoot_timer >= turret.shoot_interval:
 		turret.shoot_timer = 0.0
-		# Dispara projétil em direção ao ângulo atual da torre
 		var b = TurretBullet.new()
 		b.pos = turret.pos
 		b.vel = Vector2.RIGHT.rotated(turret.angle) * 190.0
@@ -551,12 +722,10 @@ func _process_turret(delta: float) -> void:
 		_play_sfx(sfx_turret_shot)
 		_trigger_firework(turret.pos, Color(1.0, 0.2, 0.2), 8)
 
-	# Atualiza projéteis da torre
 	for i in range(turret_bullets.size() - 1, -1, -1):
 		var tb = turret_bullets[i]
 		tb.pos += tb.vel * delta
 
-		# Checa se o projétil atingiu a raquete
 		var dist_out = tb.pos.distance_to(arena_center)
 		if dist_out >= arena_radius - 14.0:
 			var dir_ang = (tb.pos - arena_center).angle()
@@ -564,11 +733,9 @@ func _process_turret(delta: float) -> void:
 			var half_arc = deg_to_rad(paddle_arc_current / 2.0)
 
 			if diff <= half_arc:
-				# TIRO DA TORRE ACERTOU A RAQUETE:
-				# Em vez de matar, diminui o tamanho da barra progressivamente!
 				paddle_arc_current = maxf(paddle_arc_current - 14.0, 14.0)
 				paddle_buff_type = "hit"
-				paddle_buff_timer = 0.4 # Pisca em vermelho
+				paddle_buff_timer = 0.4
 				paddle_stun_timer = 0.3
 				_add_shake(5.5)
 				_trigger_firework(tb.pos, Color(1.0, 0.2, 0.2), 24)
@@ -576,7 +743,6 @@ func _process_turret(delta: float) -> void:
 				turret_bullets.remove_at(i)
 				continue
 
-		# Saiu da arena
 		if dist_out >= arena_radius + 20.0:
 			turret_bullets.remove_at(i)
 
@@ -597,7 +763,6 @@ func _process_dynamic_spawning(delta: float) -> void:
 			var coin_dist = randf_range(50.0, arena_radius * 0.65)
 			_spawn_coin(arena_center + Vector2.RIGHT.rotated(randf() * TAU) * coin_dist)
 
-		# Spawna aleatoriamente orbes especiais (Bichinho Expand, Gosma Veneno ou Bola de Fogo)
 		if active_special_orbs.size() < 2:
 			var types = ["expand", "poison", "fireball"]
 			var chosen = types[randi() % types.size()]
@@ -672,7 +837,6 @@ func _process_balls(delta: float) -> void:
 	for i in range(balls.size() - 1, -1, -1):
 		var b = balls[i]
 
-		# Timer da Bola de Fogo
 		if b.is_fireball:
 			b.fireball_timer -= delta
 			if b.fireball_timer <= 0.0:
@@ -692,7 +856,7 @@ func _process_balls(delta: float) -> void:
 			var ang_diff = abs(angle_difference(paddle_angle, impact_angle))
 			var half_arc = deg_to_rad(paddle_arc_current / 2.0)
 
-			# Acertou a raquete!
+			# 1. Acertou a raquete!
 			if ang_diff <= half_arc:
 				var inward_normal = -outward_normal
 				b.vel = b.vel.bounce(inward_normal)
@@ -714,12 +878,21 @@ func _process_balls(delta: float) -> void:
 				_play_sfx(sfx_bounce)
 				_trigger_firework(b.pos, palette["paddle"], 12)
 
+			# 2. ESCUDO DE REVIVER ATIVO: Rebate de volta automaticamente!
+			elif revive_shield_timer > 0.0:
+				var inward_normal = -outward_normal
+				b.vel = b.vel.bounce(inward_normal)
+				b.pos = arena_center + outward_normal * (boundary_limit - 1.0)
+				_add_shake(4.0)
+				_play_sfx(sfx_bounce)
+				_trigger_firework(b.pos, Color(0.2, 1.0, 0.5), 18)
+
 			else:
+				# Perdeu a bolinha
 				_trigger_firework(b.pos, Color(1.0, 0.2, 0.3), 16)
 				balls.remove_at(i)
 				continue
 
-		# Colisões
 		_check_ball_coins_pickup(b)
 		_check_ball_square_blocks_collision(b)
 		_check_ball_bumpers_collision(b)
@@ -734,6 +907,8 @@ func _check_ball_coins_pickup(b: Ball) -> void:
 		var coin = coins_items[i]
 		if b.pos.distance_to(coin.pos) <= ball_radius + coin.radius:
 			coins += 1
+			run_coins_collected += 1
+			total_coins_bank += 1
 			score += 15
 			_play_sfx(sfx_coin)
 			_trigger_firework(coin.pos, Color(1.0, 0.85, 0.15), 18)
@@ -751,7 +926,6 @@ func _check_ball_square_blocks_collision(b: Ball) -> void:
 		var overlap_y = (half_sz.y + ball_radius) - absf(diff.y)
 
 		if overlap_x > 0.0 and overlap_y > 0.0:
-			# Se for Bola de Fogo 🔥: Não rebate, pulveriza o bloco e segue reto!
 			if not b.is_fireball:
 				if overlap_x < overlap_y:
 					b.vel.x = -b.vel.x
@@ -777,7 +951,6 @@ func _check_ball_turret_collision(b: Ball) -> void:
 		b.vel = b.vel.bounce(normal)
 		b.pos = turret.pos + normal * (turret.radius + ball_radius + 2.0)
 
-		# Bola de Fogo destrói em 1 pancada! Caso contrário causa 1 de dano
 		var dmg = 5 if b.is_fireball else 1
 		turret.hp -= dmg
 		_add_shake(6.0)
@@ -785,11 +958,12 @@ func _check_ball_turret_collision(b: Ball) -> void:
 		_trigger_firework(turret.pos, Color(1.0, 0.4, 0.1), 22)
 
 		if turret.hp <= 0:
-			# TORRE DESTRUÍDA!
 			_trigger_firework(turret.pos, Color(1.0, 0.8, 0.2), 45)
 			_play_sfx(sfx_powerup)
 			score += 150
 			coins += 10
+			run_coins_collected += 10
+			total_coins_bank += 10
 			turret = null
 			_update_hud()
 
@@ -858,23 +1032,20 @@ func _apply_special_orb_effect(type: String, b: Ball, hit_pos: Vector2) -> void:
 			_trigger_firework(hit_pos, Color(1.0, 0.85, 0.2), 30)
 
 		"expand":
-			# BICHINHO VERDE: AUMENTA A RAQUETE!
 			paddle_buff_type = "expand"
-			paddle_arc_current = 76.0 # Cresce para 76 graus!
+			paddle_arc_current = 76.0
 			paddle_buff_timer = 10.0
 			_play_sfx(sfx_powerup)
 			_trigger_firework(hit_pos, Color(0.2, 1.0, 0.4), 28)
 
 		"poison":
-			# GOSMA ROXA / MALDIÇÃO: ENCOLHE A RAQUETE!
 			paddle_buff_type = "poison"
-			paddle_arc_current = 36.0 # Encolhe para 36 graus!
+			paddle_arc_current = 36.0
 			paddle_buff_timer = 8.0
 			_play_sfx(sfx_poison)
 			_trigger_firework(hit_pos, Color(0.8, 0.2, 0.9), 25)
 
 		"fireball":
-			# BOLA DE FOGO 🔥
 			b.is_fireball = true
 			b.fireball_timer = 10.0
 			b.color = Color(1.0, 0.4, 0.1)
@@ -882,6 +1053,8 @@ func _apply_special_orb_effect(type: String, b: Ball, hit_pos: Vector2) -> void:
 			_trigger_firework(hit_pos, Color(1.0, 0.4, 0.1), 35)
 
 	coins += 2
+	run_coins_collected += 2
+	total_coins_bank += 2
 	score += 30
 	_add_shake(5.0)
 	_update_hud()
@@ -889,11 +1062,16 @@ func _apply_special_orb_effect(type: String, b: Ball, hit_pos: Vector2) -> void:
 func _complete_current_stage() -> void:
 	score += 100
 	coins += 5
+	run_coins_collected += 5
+	total_coins_bank += 5
 	_play_sfx(sfx_powerup)
 	_trigger_firework(arena_center, Color(0.2, 1.0, 0.6), 45)
 
 	if current_stage_idx == 4:
 		current_state = GameState.CAMPAIGN_CLEAR
+		if score > high_score:
+			high_score = score
+		_save_profile()
 		total_score_label.text = "Pontuação: %d  |  Moedas: %d" % [score, coins]
 		victory_panel.visible = true
 		current_stage_idx += 1
@@ -902,7 +1080,7 @@ func _complete_current_stage() -> void:
 		_load_stage(current_stage_idx)
 
 # ------------------------------------------------------------------------------
-# 9. SISTEMA DE PARTÍCULAS
+# 11. SISTEMA DE PARTÍCULAS
 # ------------------------------------------------------------------------------
 func _trigger_firework(origin: Vector2, col: Color, count: int) -> void:
 	for i in range(count):
@@ -931,7 +1109,7 @@ func _add_shake(amount: float) -> void:
 	screen_shake = clampf(screen_shake + amount, 0.0, max_screen_shake)
 
 # ------------------------------------------------------------------------------
-# 10. RENDERIZAÇÃO GRÁFICA VIA CÓDIGO (_draw)
+# 12. RENDERIZAÇÃO GRÁFICA VIA CÓDIGO (_draw)
 # ------------------------------------------------------------------------------
 func _draw() -> void:
 	var shake_offset = Vector2.ZERO
@@ -945,7 +1123,13 @@ func _draw() -> void:
 	draw_circle(center, arena_radius, Color(0.06, 0.07, 0.11, 0.9))
 	draw_arc(center, arena_radius, 0.0, TAU, 84, palette["arena"], arena_line_width, true)
 
-	# 2. Hélice Rotativa (Fase 5)
+	# 2. Escudo Protetor de Reviver (se ativo)
+	if revive_shield_timer > 0.0:
+		var shield_pulse = 0.5 + 0.4 * sin(Time.get_ticks_msec() * 0.015)
+		var shield_col = Color(0.2, 1.0, 0.6, shield_pulse)
+		draw_arc(center, arena_radius - 3.0, 0.0, TAU, 64, shield_col, 6.0, true)
+
+	# 3. Hélice Rotativa (Fase 5)
 	if helix != null:
 		var h_center = helix.center + shake_offset
 		var h_dir = Vector2.RIGHT.rotated(helix.angle)
@@ -956,36 +1140,33 @@ func _draw() -> void:
 		draw_circle(p_end, helix.thickness / 2.0, helix.color)
 		draw_circle(h_center, helix.thickness * 0.7, Color.WHITE)
 
-	# 3. Torre Central Atiradora (Boss/Hazard)
+	# 4. Torre Central Atiradora (Boss)
 	if turret != null:
 		var t_pos = turret.pos + shake_offset
-		# Base da torre
 		draw_circle(t_pos, turret.radius, Color(0.85, 0.15, 0.2))
 		draw_arc(t_pos, turret.radius, 0.0, TAU, 28, Color.WHITE, 2.5, true)
-		# Canhão giratório
 		var barrel_dir = Vector2.RIGHT.rotated(turret.angle)
 		draw_line(t_pos, t_pos + barrel_dir * (turret.radius + 12.0), Color.WHITE, 6.0, true)
 		draw_circle(t_pos, 8.0, Color.BLACK)
-		# Barra de vida da torre
 		for h in range(turret.max_hp):
 			var hp_col = Color(0.2, 1.0, 0.4) if h < turret.hp else Color(0.3, 0.3, 0.3)
 			var off_x = (h - (turret.max_hp - 1) / 2.0) * 10.0
 			draw_circle(t_pos + Vector2(off_x, -turret.radius - 8.0), 3.0, hp_col)
 
-	# 4. Projéteis da Torre
+	# 5. Projéteis da Torre
 	for tb in turret_bullets:
 		var tb_pos = tb.pos + shake_offset
 		draw_circle(tb_pos, tb.radius, Color(1.0, 0.2, 0.2))
 		draw_circle(tb_pos, tb.radius * 0.5, Color.WHITE)
 
-	# 5. Bumpers Elásticos
+	# 6. Bumpers Elásticos
 	for bmp in bumpers:
 		var b_pos = bmp.pos + shake_offset
 		draw_circle(b_pos, bmp.radius, bmp.color.darkened(0.3))
 		draw_arc(b_pos, bmp.radius, 0.0, TAU, 32, Color.WHITE, 2.5, true)
 		draw_circle(b_pos, bmp.radius * 0.4, Color.WHITE)
 
-	# 6. Moedas Coletáveis
+	# 7. Moedas Coletáveis
 	for c in coins_items:
 		var c_pos = c.pos + shake_offset
 		var scale_p = 1.0 + 0.12 * sin(c.pulse)
@@ -993,7 +1174,7 @@ func _draw() -> void:
 		draw_circle(c_pos, c.radius * 0.75 * scale_p, Color(1.0, 0.95, 0.4))
 		draw_line(c_pos + Vector2(0, -5), c_pos + Vector2(0, 5), Color(0.65, 0.45, 0.0), 2.0)
 
-	# 7. Blocos Quadradinhos
+	# 8. Blocos Quadradinhos
 	for blk in square_blocks:
 		var blk_scale = blk.spawn_anim
 		var sz = blk.rect.size * blk_scale
@@ -1002,49 +1183,57 @@ func _draw() -> void:
 		draw_rect(r_off, blk.color)
 		draw_rect(r_off, Color.WHITE.lerp(blk.color, 0.4), false, 2.0)
 
-	# 8. Orbes Especiais (Expand 🟢, Veneno 🟣, Bola de Fogo 🔥, Multiball 🟡)
+	# 9. Orbes Especiais
 	for orb in active_special_orbs:
 		var o_pos = orb.pos + shake_offset
 		var pulse = 1.0 + 0.15 * sin(orb.pulse_time * 7.0)
-
 		var base_col = Color.WHITE
 		match orb.type:
 			"multiball": base_col = Color(1.0, 0.85, 0.2)
-			"expand": base_col = Color(0.2, 1.0, 0.4)    # Bichinho verde
-			"poison": base_col = Color(0.85, 0.2, 0.95)  # Gosma roxa/veneno
-			"fireball": base_col = Color(1.0, 0.4, 0.1)  # Bola de fogo
+			"expand": base_col = Color(0.2, 1.0, 0.4)
+			"poison": base_col = Color(0.85, 0.2, 0.95)
+			"fireball": base_col = Color(1.0, 0.4, 0.1)
 
 		draw_circle(o_pos, orb.radius * pulse, base_col.darkened(0.2))
 		draw_circle(o_pos, orb.radius * 0.7 * pulse, base_col)
 		draw_circle(o_pos, 4.0, Color.WHITE)
 
-	# 9. Raquete (Cor varia conforme o Buff/Debuff)
+	# 10. Raquete (com estados visuais de integridade)
 	var half_arc = deg_to_rad(paddle_arc_current / 2.0)
 	var start_ang = paddle_angle - half_arc
 	var end_ang = paddle_angle + half_arc
-	
+
 	var p_color = palette["paddle"]
 	if paddle_buff_type == "hit" or paddle_stun_timer > 0.0:
-		p_color = Color(1.0, 0.2, 0.2)   # Vermelho de dano ao tomar tiro da torre
+		p_color = Color(1.0, 0.2, 0.2)
 	elif paddle_buff_type == "expand":
-		p_color = Color(0.2, 1.0, 0.4)   # Verde brilhante quando gigante
+		p_color = Color(0.2, 1.0, 0.4)
 	elif paddle_buff_type == "poison":
-		p_color = Color(0.85, 0.2, 0.95) # Roxo venenoso quando encolhida
+		p_color = Color(0.85, 0.2, 0.95)
 	elif paddle_arc_current <= 24.0:
-		p_color = Color(1.0, 0.35, 0.2)  # Alerta: raquete em tamanho crítico!
+		p_color = Color(1.0, 0.35, 0.2)
 
 	draw_arc(center, arena_radius, start_ang, end_ang, 44, p_color, paddle_thickness, true)
 	var cap_radius = paddle_thickness / 2.0
 	draw_circle(center + Vector2.RIGHT.rotated(start_ang) * arena_radius, cap_radius, p_color)
 	draw_circle(center + Vector2.RIGHT.rotated(end_ang) * arena_radius, cap_radius, p_color)
 
-	# 10. Rastro e Bolinhas
+	# 11. Rastro das Bolinhas (Customizado pela Skin Equipada!)
 	for b in balls:
 		var t_size = b.trail.size()
 		for t_idx in range(t_size):
 			var alpha = 1.0 - (float(t_idx) / float(t_size))
 			var r_sz = ball_radius * (1.0 - (float(t_idx) / float(t_size)) * 0.6)
-			var trail_col = Color(1.0, 0.45, 0.1) if b.is_fireball else palette["paddle"]
+
+			var trail_col = palette["paddle"]
+			if b.is_fireball or equipped_skin == "fire":
+				trail_col = Color(1.0, 0.45, 0.1)
+			elif equipped_skin == "synth":
+				trail_col = Color(1.0, 0.2, 0.8)
+			elif equipped_skin == "rainbow":
+				var hue = fmod(float(t_idx) * 0.08 + float(Time.get_ticks_msec()) * 0.001, 1.0)
+				trail_col = Color.from_hsv(hue, 0.9, 1.0)
+
 			trail_col.a = alpha * 0.5
 			draw_circle(b.trail[t_idx] + shake_offset, r_sz, trail_col)
 
@@ -1052,7 +1241,7 @@ func _draw() -> void:
 		draw_circle(b.pos + shake_offset, ball_radius, b_col)
 		draw_circle(b.pos + shake_offset, ball_radius * 0.5, Color.WHITE)
 
-	# 11. Partículas
+	# 12. Partículas
 	for pt in particles:
 		var alpha = pt.life / pt.max_life
 		var col = pt.color
@@ -1060,7 +1249,7 @@ func _draw() -> void:
 		draw_circle(pt.pos + shake_offset, pt.size * alpha, col)
 
 # ------------------------------------------------------------------------------
-# 11. HUD E GAME OVER
+# 13. HUD E GAME OVER
 # ------------------------------------------------------------------------------
 func _update_hud() -> void:
 	score_label.text = "PONTOS: %d" % score
@@ -1069,7 +1258,27 @@ func _update_hud() -> void:
 func _trigger_game_over() -> void:
 	current_state = GameState.GAME_OVER
 	_play_sfx(sfx_gameover)
+
+	if score > high_score:
+		high_score = score
+	_save_profile()
+
 	final_score_label.text = "Pontuação: %d  |  Moedas: %d" % [score, coins]
+	high_score_label.text = "🏆 RECORDE PESSOAL: %d" % high_score
 	waves_cleared_label.text = "Fases Concluídas: %d" % current_stage_idx
+
+	revive_button.disabled = has_revived_this_run
+	if has_revived_this_run:
+		revive_button.text = "REVIVER JÁ USADO ❌"
+	else:
+		revive_button.text = "📺 REVIVER PARTIDA (1x)"
+
+	if has_doubled_coins_this_run:
+		double_coins_button.text = "MOEDAS DOBRADAS ✅"
+		double_coins_button.disabled = true
+	else:
+		double_coins_button.text = "🪙 2x MOEDAS (+%d)" % run_coins_collected
+		double_coins_button.disabled = (run_coins_collected == 0)
+
 	game_over_panel.visible = true
 	queue_redraw()

@@ -13,7 +13,7 @@ anchor_right = 1.0
 offset_left = 28.0
 offset_top = 40.0
 offset_right = -28.0
-offset_bottom = 140.0
+offset_bottom = 150.0
 grow_horizontal = 2
 
 [node name="VBoxContainer" type="VBoxContainer" parent="HUD/TopBar"]
@@ -22,31 +22,37 @@ theme_override_constants/separation = 6
 
 [node name="HBoxContainer" type="HBoxContainer" parent="HUD/TopBar/VBoxContainer"]
 layout_mode = 2
+theme_override_constants/separation = 12
 
 [node name="WaveLabel" type="Label" parent="HUD/TopBar/VBoxContainer/HBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.25, 0.9, 1, 1)
-theme_override_font_sizes/font_size = 22
+theme_override_font_sizes/font_size = 20
 text = "FASE 1: O DESPERTAR"
 
 [node name="ScoreLabel" type="Label" parent="HUD/TopBar/VBoxContainer/HBoxContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 22
+theme_override_font_sizes/font_size = 20
 text = "PONTOS: 0"
 horizontal_alignment = 1
 
 [node name="CoinsLabel" type="Label" parent="HUD/TopBar/VBoxContainer/HBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
-theme_override_font_sizes/font_size = 22
+theme_override_font_sizes/font_size = 20
 text = "🪙 0"
-horizontal_alignment = 2
+
+[node name="TopShopButton" type="Button" parent="HUD/TopBar/VBoxContainer/HBoxContainer"]
+custom_minimum_size = Vector2(70, 32)
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "🎨 LOJA"
 
 [node name="ObjectiveLabel" type="Label" parent="HUD/TopBar/VBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.85, 0.9, 0.95, 0.9)
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 15
 text = "Meta: 150 PONTOS (0/150)"
 horizontal_alignment = 1
 
@@ -80,48 +86,144 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -190.0
-offset_top = -130.0
-offset_right = 190.0
-offset_bottom = 130.0
+offset_left = -210.0
+offset_top = -210.0
+offset_right = 210.0
+offset_bottom = 210.0
 grow_horizontal = 2
 grow_vertical = 2
 
 [node name="MarginContainer" type="MarginContainer" parent="HUD/GameOverPanel"]
 layout_mode = 2
-theme_override_constants/margin_left = 28
-theme_override_constants/margin_top = 28
-theme_override_constants/margin_right = 28
-theme_override_constants/margin_bottom = 28
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
 
 [node name="VBoxContainer" type="VBoxContainer" parent="HUD/GameOverPanel/MarginContainer"]
 layout_mode = 2
-theme_override_constants/separation = 14
+theme_override_constants/separation = 10
 
 [node name="TitleLabel" type="Label" parent="HUD/GameOverPanel/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.3, 0.35, 1)
-theme_override_font_sizes/font_size = 28
+theme_override_font_sizes/font_size = 26
 text = "GAME OVER"
 horizontal_alignment = 1
 
 [node name="FinalScoreLabel" type="Label" parent="HUD/GameOverPanel/MarginContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
+theme_override_font_sizes/font_size = 17
 text = "Pontuação: 0  |  Moedas: 0"
+horizontal_alignment = 1
+
+[node name="HighScoreLabel" type="Label" parent="HUD/GameOverPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
+theme_override_font_sizes/font_size = 15
+text = "🏆 RECORDE PESSOAL: 0"
 horizontal_alignment = 1
 
 [node name="WavesClearedLabel" type="Label" parent="HUD/GameOverPanel/MarginContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 14
 text = "Fases Concluídas: 0"
 horizontal_alignment = 1
 
-[node name="RestartButton" type="Button" parent="HUD/GameOverPanel/MarginContainer/VBoxContainer"]
-custom_minimum_size = Vector2(0, 48)
+[node name="ReviveButton" type="Button" parent="HUD/GameOverPanel/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
+theme_override_colors/font_color = Color(0.2, 1, 0.5, 1)
+theme_override_font_sizes/font_size = 16
+text = "📺 REVIVER PARTIDA (1x)"
+
+[node name="DoubleCoinsButton" type="Button" parent="HUD/GameOverPanel/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
+theme_override_font_sizes/font_size = 15
+text = "🪙 2x MOEDAS DA PARTIDA"
+
+[node name="GameOverShopButton" type="Button" parent="HUD/GameOverPanel/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "🎨 LOJA DE SKINS"
+
+[node name="RestartButton" type="Button" parent="HUD/GameOverPanel/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
 text = "JOGAR NOVAMENTE"
+
+[node name="ShopPanel" type="PanelContainer" parent="HUD"]
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -230.0
+offset_top = -230.0
+offset_right = 230.0
+offset_bottom = 230.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="HUD/ShopPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
+
+[node name="VBoxContainer" type="VBoxContainer" parent="HUD/ShopPanel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TitleLabel" type="Label" parent="HUD/ShopPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.3, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "LOJA DE SKINS 🎨"
+horizontal_alignment = 1
+
+[node name="ShopCoinsLabel" type="Label" parent="HUD/ShopPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
+theme_override_font_sizes/font_size = 16
+text = "Saldo Total: 🪙 0"
+horizontal_alignment = 1
+
+[node name="SkinClassicBtn" type="Button" parent="HUD/ShopPanel/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "🔵 Ciano Clássico [EQUIPADO]"
+
+[node name="SkinFireBtn" type="Button" parent="HUD/ShopPanel/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "🔥 Fogo Solar (40 Moedas)"
+
+[node name="SkinSynthBtn" type="Button" parent="HUD/ShopPanel/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "🌸 Synthwave Rosa (70 Moedas)"
+
+[node name="SkinRainbowBtn" type="Button" parent="HUD/ShopPanel/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "🌈 Arco-Íris Cósmico (120 Moedas)"
+
+[node name="CloseShopButton" type="Button" parent="HUD/ShopPanel/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "FECHAR LOJA"
 
 [node name="VictoryPanel" type="PanelContainer" parent="HUD"]
 visible = false
