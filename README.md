@@ -1,16 +1,19 @@
 # Orbit Bounce (Pong Circular) 🪐⚪
 
+<p align="center">
+  <img src="assets/icons/feature_graphic_1024x500.png" width="680" alt="Orbit Bounce Banner">
+</p>
+
 Jogo mobile 2D de ritmo rápido e reflexos no estilo **"Pong Circular / Breakout Orbital"** desenvolvido em **Godot 4.x** com **GDScript 2.0**.
 
 Desenvolvido com física vetorial matemática precisa e renderização gráfica procedural via `CanvasItem._draw()`, sem dependência de texturas ou assets pesados.
 
 ---
 
-## 📱 Baixe e Jogue no Android
+## 📱 Downloads Oficiais (Android e Web)
 
-O jogo já possui build compilada e pronta para instalar no seu smartphone:
-
-👉 **[Baixar APK Oficial (Releases)](https://github.com/marcos-toliveira/orbit-bounce/releases/latest/download/orbit-bounce.apk)**
+- 📲 **[Baixar APK Android (Instalação Direta)](https://github.com/marcos-toliveira/orbit-bounce/releases/latest/download/orbit-bounce.apk)**
+- 🌐 **[Baixar Pacote Web HTML5/WASM (Poki, CrazyGames & itch.io)](https://github.com/marcos-toliveira/orbit-bounce/releases/latest/download/orbit-bounce-web.zip)**
 
 ---
 
@@ -34,9 +37,17 @@ O jogo já possui build compilada e pronta para instalar no seu smartphone:
 - **Spawn Orgânico Contínuo:** Novos blocos quadradinhos e moedas surgem periodicamente no centro, garantindo ação ininterrupta e eliminando o problema do "último bloco".
 - **Moedas Coletáveis (*Pass-Through*):** A bolinha atravessa as moedas sem desvios bruscos, garantindo trajetórias suaves e previsíveis.
 - **Bloquinhos Quadradinhos Quebráveis:** Ricochete ortogonal limpo (eixos X/Y) estilo *Arkanoid*.
-- **Multiball (3 Bolinhas Simultâneas):** Poder especial que multiplica a bola em 3 trajetórias com divergência angular.
-- **Pinball Bumpers & Hélice Rotativa:** Obstáculos elásticos que aumentam o impulso e lâmina central giratória que transfere momento angular.
-- **Efeitos "Juicy":** Partículas 2D estilo fogos de artifício (*Tchiu!*), rastro luminoso (*trail*) e tremor sutil de tela (*screen shake*).
+- **Torre Central Atiradora (Boss Hazard):** Torre rotativa que dispara projéteis vermelhos em direção ao jogador. Os tiros **nunca** causam Game Over direto: cada tiro reduz a largura da raquete (76° ➔ 54° ➔ 40° ➔ 26° ➔ 14° crítico), desafiando a precisão do jogador. A bola precisa acertar a torre para destruí-la!
+- **Orbes Especiais e Poderes:**
+  - 🟢 **Bichinho Verde (Expand):** Aumenta a raquete temporariamente para 76°, facilitando as defesas.
+  - 🟣 **Gosma Tóxica (Shrink):** Encolhe a raquete para 36°, exigindo máxima concentração.
+  - 🔥 **Bola de Fogo (Fireball):** Rastro incandescente, destrói blocos instantaneamente sem ricochetear e elimina a torre central em 1 golpe!
+  - 🟡 **Multiball (3 Bolinhas):** Multiplica a bola em 3 trajetórias divergentes simultâneas.
+- **Áudio 8-Bit Síntese Procedural:** Gerador de ondas de áudio PCM em tempo real via código GDScript (`AudioStreamWAV`), dispensando arquivos `.wav`/`.mp3` externos.
+- **Economia, Loja de Skins e Persistência:**
+  - Salva automaticamente o seu Recorde Pessoal (*High Score*) e saldo de moedas no banco (`user://orbit_bounce_save.json`).
+  - **Loja de Cosméticos:** Desbloqueie e equipe skins exclusivas de rastro luminoso (Clássico, Chama Solar 🔥, Synthwave Neon 💖 e Arco-Íris Mágico 🌈).
+  - **Loop de Recompensa:** Botão para reviver partida (1x por run com barreira protetora esmeralda) e dobrar moedas coletadas.
 
 ---
 
