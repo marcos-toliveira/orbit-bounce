@@ -63,9 +63,9 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -200.0
-offset_top = -415.0
-offset_right = 200.0
+offset_left = -220.0
+offset_top = -425.0
+offset_right = 220.0
 offset_bottom = -315.0
 grow_horizontal = 2
 grow_vertical = 2
@@ -75,21 +75,21 @@ alignment = 1
 [node name="BigScoreLabel" type="Label" parent="HUD/GameHUD/CenterScoreHUD"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.2, 0.95, 1, 1)
-theme_override_font_sizes/font_size = 46
+theme_override_font_sizes/font_size = 50
 text = "0"
 horizontal_alignment = 1
 
 [node name="StageProgressBar" type="ProgressBar" parent="HUD/GameHUD/CenterScoreHUD"]
-custom_minimum_size = Vector2(260, 12)
+custom_minimum_size = Vector2(280, 14)
 layout_mode = 2
 size_flags_horizontal = 4
 show_percentage = false
 
 [node name="ObjectiveLabel" type="Label" parent="HUD/GameHUD/CenterScoreHUD"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.85, 0.92, 1, 0.85)
-theme_override_font_sizes/font_size = 15
-text = "META: 150 PONTOS (0/150)"
+theme_override_colors/font_color = Color(0.85, 0.92, 1, 0.9)
+theme_override_font_sizes/font_size = 16
+text = "🎯 META: 400 PONTOS (0/400)"
 horizontal_alignment = 1
 
 [node name="DimmerOverlay" type="ColorRect" parent="HUD"]
@@ -500,7 +500,90 @@ text = "VOLTAR AO MAPA DE FASES 🗺️"
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 theme_override_font_sizes/font_size = 18
-text = "CONTINUAR NO MODO INFINITO ♾️"
+[node name="StageBriefingPanel" type="PanelContainer" parent="HUD"]
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -340.0
+offset_right = 300.0
+offset_bottom = 340.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="HUD/StageBriefingPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
+
+[node name="VBoxContainer" type="VBoxContainer" parent="HUD/StageBriefingPanel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="BriefingTitle" type="Label" parent="HUD/StageBriefingPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.2, 0.95, 1, 1)
+theme_override_font_sizes/font_size = 30
+text = "FASE 1: O DESPERTAR"
+horizontal_alignment = 1
+
+[node name="BriefingSubtitle" type="Label" parent="HUD/StageBriefingPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
+theme_override_font_sizes/font_size = 17
+text = "🎯 MISSÃO DA FASE"
+horizontal_alignment = 1
+
+[node name="BriefingDesc" type="Label" parent="HUD/StageBriefingPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.94, 1, 0.95)
+theme_override_font_sizes/font_size = 16
+text = "Atinja 400 Pontos rebatendo na raquete e quebrando os blocos centrais!"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="HSeparator" type="HSeparator" parent="HUD/StageBriefingPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="BriefingTarget" type="Label" parent="HUD/StageBriefingPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.25, 1, 0.55, 1)
+theme_override_font_sizes/font_size = 22
+text = "META: 400 PONTOS"
+horizontal_alignment = 1
+
+[node name="BriefingStars" type="Label" parent="HUD/StageBriefingPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
+theme_override_font_sizes/font_size = 15
+text = "⭐ 400 pts  |  ⭐⭐ 520 pts  |  ⭐⭐⭐ 650 pts"
+horizontal_alignment = 1
+
+[node name="BriefingTip" type="Label" parent="HUD/StageBriefingPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.75, 0.9, 0.9)
+theme_override_font_sizes/font_size = 14
+text = "💡 Dica: A bolinha acelera a cada rebatida."
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="StartStageButton" type="Button" parent="HUD/StageBriefingPanel/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.2, 1, 0.55, 1)
+theme_override_font_sizes/font_size = 20
+text = "COMEÇAR DESAFIO ▶"
+
+[node name="BriefingMapButton" type="Button" parent="HUD/StageBriefingPanel/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_override_font_sizes/font_size = 17
+text = "MAPA DE FASES 🗺️"
 
 [node name="WaveBanner" type="Label" parent="HUD"]
 visible = false

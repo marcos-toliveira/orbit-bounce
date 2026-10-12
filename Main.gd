@@ -1,8 +1,8 @@
 extends Node2D
 
 # ==============================================================================
-# ORBIT BOUNCE (PONG CIRCULAR) - EVOLUTION 6.0
-# Sistema de Vidas (Candy Crush Style), Mapa de Fases, Modais Sólidos e HUD Central
+# ORBIT BOUNCE (PONG CIRCULAR) - EVOLUTION 7.0
+# Clareza de Objetivos, Briefing de Fases, Duração Calibrada & Celebrações
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
@@ -103,13 +103,19 @@ class TurretBoss:
 	var shoot_interval: float = 2.4
 
 # ------------------------------------------------------------------------------
-# 3. DEFINIÇÃO DAS 5 FASES DA CAMPANHA
+# 3. DEFINIÇÃO DAS 5 FASES DA CAMPANHA (METAS CALIBRADAS & MISSÕES CLARAS)
 # ------------------------------------------------------------------------------
 const STAGE_CONFIGS = [
 	{
 		"stage": 1,
 		"title": "FASE 1: O DESPERTAR",
-		"target_score": 150,
+		"mission_title": "🎯 MISSÃO: O DESPERTAR",
+		"mission_desc": "Alcance 400 Pontos rebatendo a bolinha na raquete, quebrando os blocos centrais e coletando moedas orbitais!",
+		"mission_tip": "💡 Dica: A bolinha acelera suavemente a cada rebatida. Mantenha a raquete ágil!",
+		"target_score": 400,
+		"star_1": 400,
+		"star_2": 540,
+		"star_3": 700,
 		"has_turret": false,
 		"palette": {
 			"name": "NEON CYAN",
@@ -121,7 +127,13 @@ const STAGE_CONFIGS = [
 	{
 		"stage": 2,
 		"title": "FASE 2: PODERES & FEITIÇOS",
-		"target_score": 220,
+		"mission_title": "🔥 MISSÃO: PODERES & FEITIÇOS",
+		"mission_desc": "Alcance 700 Pontos! Use a Bola de Fogo 🔥 para pulverizar blocos e fuja da Gosma Roxa 🟣 que encolhe sua raquete!",
+		"mission_tip": "💡 Dica: O Bichinho Verde 🟢 expande sua raquete para 76°, facilitando as defesas.",
+		"target_score": 700,
+		"star_1": 700,
+		"star_2": 950,
+		"star_3": 1250,
 		"has_turret": false,
 		"palette": {
 			"name": "PURPLE NEON",
@@ -133,7 +145,13 @@ const STAGE_CONFIGS = [
 	{
 		"stage": 3,
 		"title": "FASE 3: PINBALL & BUMPERS",
-		"target_score": 300,
+		"mission_title": "💥 MISSÃO: PINBALL & BUMPERS",
+		"mission_desc": "Alcance 1000 Pontos! Enfrente a Torre Central atiradora 💥 e use o impulso veloz dos Bumpers elásticos azuis!",
+		"mission_tip": "💡 Dica: Acerte a Torre com a bolinha para causar dano (+50 pts) e destruí-la (+150 pts)!",
+		"target_score": 1000,
+		"star_1": 1000,
+		"star_2": 1350,
+		"star_3": 1750,
 		"has_turret": true,
 		"palette": {
 			"name": "ELECTRIC BLUE",
@@ -145,7 +163,13 @@ const STAGE_CONFIGS = [
 	{
 		"stage": 4,
 		"title": "FASE 4: CAOS TRIPLO & FOGO",
-		"target_score": 400,
+		"mission_title": "🟡 MISSÃO: CAOS TRIPLO & FOGO",
+		"mission_desc": "Alcance 1400 Pontos no Caos Triplo! Colete o Multiball 🟡 para controlar 3 bolinhas simultâneas e multiplicar sua pontuação!",
+		"mission_tip": "💡 Dica: Enquanto pelo menos 1 bolinha estiver viva, você continua pontuando a toda velocidade!",
+		"target_score": 1400,
+		"star_1": 1400,
+		"star_2": 1900,
+		"star_3": 2500,
 		"has_turret": false,
 		"palette": {
 			"name": "EMERALD LIME",
@@ -157,7 +181,13 @@ const STAGE_CONFIGS = [
 	{
 		"stage": 5,
 		"title": "FASE 5: A HÉLICE & FORTALEZA",
-		"target_score": 500,
+		"mission_title": "⚡ MISSÃO: A HÉLICE & FORTALEZA",
+		"mission_desc": "Alcance 1900 Pontos! Supere a Lâmina da Hélice giratória ⚡ e derrote a Fortaleza Central armada no grande confronto final!",
+		"mission_tip": "💡 Dica: A Hélice transfere momento angular. Pegue a Bola de Fogo 🔥 para destruir a Torre em 1 golpe!",
+		"target_score": 1900,
+		"star_1": 1900,
+		"star_2": 2500,
+		"star_3": 3200,
 		"has_turret": true,
 		"palette": {
 			"name": "SOLAR AMBER",
@@ -175,7 +205,7 @@ const SAVE_PATH = "user://orbit_bounce_save.json"
 const MAX_LIVES = 5
 const LIFE_RECHARGE_SECONDS = 180 # 3 minutos para recarregar 1 vida
 
-enum GameState { MAP, PLAYING, STAGE_CLEAR, GAME_OVER, VICTORY }
+enum GameState { MAP, BRIEFING, PLAYING, STAGE_CLEAR, GAME_OVER, VICTORY }
 var current_state: GameState = GameState.MAP
 
 var arena_center: Vector2 = Vector2.ZERO
@@ -196,11 +226,13 @@ var equipped_skin: String = "classic"
 
 # Estado da Rodada Atual
 var current_stage_idx: int = 0
+var target_briefing_stage_idx: int = 0
 var score: int = 0
 var coins: int = 0
 var run_coins_collected: int = 0
 var screen_shake: float = 0.0
 var dynamic_spawn_timer: float = 0.0
+var is_stage_completing: bool = false
 
 var paddle_arc_current: float = 54.0
 var paddle_buff_timer: float = 0.0
@@ -245,6 +277,17 @@ var sfx_gameover: AudioStreamWAV
 @onready var stage_progress_bar: ProgressBar = $HUD/GameHUD/CenterScoreHUD/StageProgressBar
 @onready var objective_label: Label = $HUD/GameHUD/CenterScoreHUD/ObjectiveLabel
 @onready var wave_banner: Label = $HUD/WaveBanner
+
+# UI Briefing de Fase (Apresentação Clara do Objetivo)
+@onready var stage_briefing_panel: PanelContainer = $HUD/StageBriefingPanel
+@onready var briefing_title: Label = $HUD/StageBriefingPanel/MarginContainer/VBoxContainer/BriefingTitle
+@onready var briefing_subtitle: Label = $HUD/StageBriefingPanel/MarginContainer/VBoxContainer/BriefingSubtitle
+@onready var briefing_desc: Label = $HUD/StageBriefingPanel/MarginContainer/VBoxContainer/BriefingDesc
+@onready var briefing_target: Label = $HUD/StageBriefingPanel/MarginContainer/VBoxContainer/BriefingTarget
+@onready var briefing_stars: Label = $HUD/StageBriefingPanel/MarginContainer/VBoxContainer/BriefingStars
+@onready var briefing_tip: Label = $HUD/StageBriefingPanel/MarginContainer/VBoxContainer/BriefingTip
+@onready var start_stage_button: Button = $HUD/StageBriefingPanel/MarginContainer/VBoxContainer/StartStageButton
+@onready var briefing_map_button: Button = $HUD/StageBriefingPanel/MarginContainer/VBoxContainer/BriefingMapButton
 
 # UI Mapa de Fases
 @onready var level_map_panel: PanelContainer = $HUD/LevelMapPanel
@@ -311,6 +354,9 @@ func _ready() -> void:
 	map_buy_lives_btn.pressed.connect(_open_shop)
 	map_shop_btn.pressed.connect(_open_shop)
 
+	start_stage_button.pressed.connect(_on_start_challenge_pressed)
+	briefing_map_button.pressed.connect(_open_map)
+
 	retry_stage_button.pressed.connect(_on_retry_pressed)
 	revive_button.pressed.connect(_on_revive_pressed)
 	double_coins_button.pressed.connect(_on_double_coins_pressed)
@@ -339,6 +385,7 @@ func _update_center_pos() -> void:
 	arena_center = get_viewport_rect().size / 2.0
 
 func _apply_modal_styles() -> void:
+	_style_panel(stage_briefing_panel, Color(0.2, 0.95, 1.0, 1.0))
 	_style_panel(level_map_panel, Color(0.18, 0.75, 1.0, 1.0))
 	_style_panel(game_over_panel, Color(1.0, 0.35, 0.45, 1.0))
 	_style_panel(stage_clear_panel, Color(0.2, 1.0, 0.55, 1.0))
@@ -347,7 +394,7 @@ func _apply_modal_styles() -> void:
 
 func _style_panel(panel: PanelContainer, border_col: Color) -> void:
 	var sb = StyleBoxFlat.new()
-	sb.bg_color = Color(0.06, 0.08, 0.12, 0.98) # Fundo sólido super escuro
+	sb.bg_color = Color(0.06, 0.08, 0.12, 0.98) # Fundo sólido super escuro anti-vazamento
 	sb.border_color = border_col
 	sb.set_border_width_all(3)
 	sb.set_corner_radius_all(18)
@@ -358,7 +405,7 @@ func _style_panel(panel: PanelContainer, border_col: Color) -> void:
 	panel.add_theme_stylebox_override("panel", sb)
 
 func _update_dimmer() -> void:
-	var any_modal = level_map_panel.visible or game_over_panel.visible or stage_clear_panel.visible or shop_panel.visible or victory_panel.visible
+	var any_modal = stage_briefing_panel.visible or level_map_panel.visible or game_over_panel.visible or stage_clear_panel.visible or shop_panel.visible or victory_panel.visible
 	dimmer_overlay.visible = any_modal
 	dimmer_overlay.mouse_filter = Control.MOUSE_FILTER_STOP if any_modal else Control.MOUSE_FILTER_IGNORE
 
@@ -521,7 +568,7 @@ func _generate_tone(freq_start: float, freq_end: float, duration: float, wave_ty
 	return wav
 
 # ------------------------------------------------------------------------------
-# 9. SISTEMA DE MAPA DE FASES (LEVEL PROGRESSION MAP)
+# 9. SISTEMA DE MAPA DE FASES E BRIEFING DE OBJETIVO
 # ------------------------------------------------------------------------------
 func _open_map() -> void:
 	current_state = GameState.MAP
@@ -534,7 +581,7 @@ func _close_map() -> void:
 	level_map_panel.visible = false
 	_update_dimmer()
 	if current_state == GameState.MAP:
-		_start_stage(current_stage_idx)
+		_show_stage_briefing(current_stage_idx)
 
 func _update_map_ui() -> void:
 	map_lives_label.text = _get_lives_text()
@@ -680,8 +727,37 @@ func _select_stage_from_map(stage_idx: int) -> void:
 		return
 
 	level_map_panel.visible = false
+	_show_stage_briefing(stage_idx)
+
+# Briefing explicativo antes de a bolinha começar a voar!
+func _show_stage_briefing(stage_idx: int) -> void:
+	target_briefing_stage_idx = stage_idx
+	current_state = GameState.BRIEFING
+	_hide_all_modals()
+
+	if stage_idx < STAGE_CONFIGS.size():
+		var cfg = STAGE_CONFIGS[stage_idx]
+		briefing_title.text = cfg["title"]
+		briefing_subtitle.text = cfg["mission_title"]
+		briefing_desc.text = cfg["mission_desc"]
+		briefing_target.text = "🎯 META: %d PONTOS" % cfg["target_score"]
+		briefing_stars.text = "⭐ %d pts  |  ⭐⭐ %d pts  |  ⭐⭐⭐ %d pts" % [cfg["star_1"], cfg["star_2"], cfg["star_3"]]
+		briefing_tip.text = cfg["mission_tip"]
+	else:
+		briefing_title.text = "MODO INFINITO ♾️"
+		briefing_subtitle.text = "SOBREVIVÊNCIA MÁXIMA"
+		briefing_desc.text = "Sobreviva o máximo que puder, desvie de projéteis e acumule a maior pontuação possível!"
+		briefing_target.text = "RECORDE ATUAL: %d PONTOS" % high_score
+		briefing_stars.text = "Supere seus limites a cada partida!"
+		briefing_tip.text = "💡 A velocidade aumenta progressivamente. Concentre-se nos desvios!"
+
+	stage_briefing_panel.visible = true
 	_update_dimmer()
-	_start_stage(stage_idx)
+
+func _on_start_challenge_pressed() -> void:
+	stage_briefing_panel.visible = false
+	_update_dimmer()
+	_start_stage(target_briefing_stage_idx)
 
 # ------------------------------------------------------------------------------
 # 10. LOJA DE SKINS & SISTEMA REWARDED
@@ -788,6 +864,7 @@ func _on_double_coins_pressed() -> void:
 func _start_stage(stage_idx: int) -> void:
 	_hide_all_modals()
 	current_state = GameState.PLAYING
+	is_stage_completing = false
 
 	score = 0
 	coins = 0
@@ -817,11 +894,10 @@ func _start_stage(stage_idx: int) -> void:
 
 func start_infinite_mode() -> void:
 	_hide_all_modals()
-	current_state = GameState.PLAYING
-	current_stage_idx = 99
-	_start_stage(current_stage_idx)
+	_show_stage_briefing(99)
 
 func _hide_all_modals() -> void:
+	stage_briefing_panel.visible = false
 	level_map_panel.visible = false
 	game_over_panel.visible = false
 	stage_clear_panel.visible = false
@@ -839,6 +915,7 @@ func _load_stage(stage_idx: int) -> void:
 	turret = null
 	turret_bullets.clear()
 	dynamic_spawn_timer = 0.0
+	is_stage_completing = false
 
 	var cfg = _get_current_config()
 	var palette = cfg["palette"]
@@ -901,7 +978,9 @@ func _load_stage(stage_idx: int) -> void:
 	stage_name_label.text = cfg["title"]
 	stage_name_label.add_theme_color_override("font_color", palette["paddle"])
 	_update_objective_and_progress()
-	_show_wave_banner(cfg["title"])
+
+	var goal_banner = "🎯 META: %d PONTOS!" % cfg["target_score"] if stage_idx < STAGE_CONFIGS.size() else "MODO INFINITO!"
+	_show_wave_banner(goal_banner)
 	_update_hud()
 
 func _create_square_block(top_left: Vector2, size: Vector2, col: Color) -> void:
@@ -948,7 +1027,7 @@ func _show_wave_banner(text: String) -> void:
 	var tween = create_tween()
 	wave_banner.modulate = Color(1, 1, 1, 0)
 	tween.tween_property(wave_banner, "modulate:a", 1.0, 0.25)
-	tween.tween_interval(1.1)
+	tween.tween_interval(1.4)
 	tween.tween_property(wave_banner, "modulate:a", 0.0, 0.35)
 	tween.tween_callback(func(): wave_banner.visible = false)
 
@@ -1083,8 +1162,8 @@ func _process(delta: float) -> void:
 
 		ball_idx -= 1
 
-	# Game Over se acabarem todas as bolinhas
-	if balls.is_empty():
+	# Game Over se acabarem todas as bolinhas (apenas se não estiver completando a fase)
+	if balls.is_empty() and not is_stage_completing:
 		_trigger_game_over()
 
 	queue_redraw()
@@ -1136,13 +1215,13 @@ func _spawn_dynamic_content() -> void:
 	var palette = cfg["palette"]
 	var blk_size = Vector2(28, 28)
 
-	if square_blocks.size() < 4:
+	if square_blocks.size() < 5:
 		var ang = randf() * TAU
 		var dist = randf_range(50.0, arena_radius * 0.55)
 		var pos = arena_center + Vector2.RIGHT.rotated(ang) * dist - blk_size / 2.0
 		_create_square_block(pos, blk_size, palette["accent"])
 
-	if coins_items.size() < 3:
+	if coins_items.size() < 4:
 		var c_ang = randf() * TAU
 		var c_dist = randf_range(40.0, arena_radius * 0.65)
 		_spawn_coin(arena_center + Vector2.RIGHT.rotated(c_ang) * c_dist)
@@ -1187,6 +1266,7 @@ func _check_ball_paddle_collision(b: Ball) -> void:
 				_add_shake(2.0)
 				_play_sfx(sfx_bounce)
 				_trigger_firework(b.pos, _get_current_config()["palette"]["paddle"], 10)
+				_check_stage_goal()
 
 func _check_ball_coins_collision(b: Ball) -> void:
 	for i in range(coins_items.size() - 1, -1, -1):
@@ -1296,6 +1376,7 @@ func _check_ball_helix_collision(b: Ball) -> void:
 		score += 5
 		_spawn_floating_text(closest, "+5", helix.color, 20)
 		_update_hud()
+		_check_stage_goal()
 
 func _check_ball_special_orbs_collision(b: Ball) -> void:
 	for i in range(active_special_orbs.size() - 1, -1, -1):
@@ -1349,15 +1430,28 @@ func _apply_special_power(type: String, hit_pos: Vector2) -> void:
 	_check_stage_goal()
 
 # ------------------------------------------------------------------------------
-# 15. PROGRESSÃO DE FASE & VITÓRIA
+# 15. PROGRESSÃO DE FASE & TRANSIÇÃO COMEMORATIVA
 # ------------------------------------------------------------------------------
 func _check_stage_goal() -> void:
-	if current_stage_idx >= STAGE_CONFIGS.size():
+	if current_stage_idx >= STAGE_CONFIGS.size() or is_stage_completing:
 		return # Modo infinito não tem meta fixa
 
 	var target = STAGE_CONFIGS[current_stage_idx]["target_score"]
 	if score >= target:
-		_complete_current_stage()
+		is_stage_completing = true
+		_play_sfx(sfx_powerup)
+		_show_wave_banner("🎯 OBJETIVO CONCLUÍDO!")
+		_trigger_firework(arena_center, Color(0.2, 1.0, 0.6), 55)
+		_spawn_floating_text(arena_center, "FASE COMPLETA! 🏆", Color(1.0, 0.85, 0.2), 32)
+
+		# Desacelera as bolinhas para celebrar
+		for b in balls:
+			b.vel *= 0.35
+
+		# Transição suave para o painel de vitória
+		var tween = create_tween()
+		tween.tween_interval(0.85)
+		tween.tween_callback(_complete_current_stage)
 
 func _complete_current_stage() -> void:
 	current_state = GameState.STAGE_CLEAR
@@ -1366,10 +1460,9 @@ func _complete_current_stage() -> void:
 	coins += 10
 	run_coins_collected += 10
 	total_coins_bank += 10
-	_play_sfx(sfx_powerup)
-	_trigger_firework(arena_center, Color(0.2, 1.0, 0.6), 50)
 
-	var target = STAGE_CONFIGS[current_stage_idx]["target_score"]
+	var cfg = STAGE_CONFIGS[current_stage_idx]
+	var target = cfg["target_score"]
 	var stage_key = str(current_stage_idx)
 
 	# Atualiza recorde da fase
@@ -1377,11 +1470,11 @@ func _complete_current_stage() -> void:
 	if score > prev_record:
 		stage_high_scores[stage_key] = score
 
-	# Calcula estrelas
+	# Calcula estrelas com base nos limiares da fase
 	var stars = 1
-	if score >= int(target * 1.45):
+	if score >= cfg["star_3"]:
 		stars = 3
-	elif score >= int(target * 1.20):
+	elif score >= cfg["star_2"]:
 		stars = 2
 	stage_stars[stage_key] = maxi(stage_stars.get(stage_key, 0), stars)
 
@@ -1403,7 +1496,7 @@ func _complete_current_stage() -> void:
 		stage_clear_unlock_label.text = "🏆 MODO INFINITO DESBLOQUEADO!"
 		next_stage_button.text = "MODO INFINITO ♾️"
 	else:
-		stage_clear_unlock_label.text = "🔓 Fase %d Desbloqueada no Mapa!" % (current_stage_idx + 2)
+		stage_clear_unlock_label.text = "🔓 Fase %d Liberada no Mapa!" % (current_stage_idx + 2)
 		next_stage_button.text = "PRÓXIMA FASE ➡️"
 
 	stage_clear_panel.visible = true
@@ -1413,7 +1506,7 @@ func _on_next_stage_pressed() -> void:
 	stage_clear_panel.visible = false
 	_update_dimmer()
 	if current_stage_idx < STAGE_CONFIGS.size() - 1:
-		_start_stage(current_stage_idx + 1)
+		_show_stage_briefing(current_stage_idx + 1)
 	else:
 		start_infinite_mode()
 
@@ -1596,14 +1689,28 @@ func _update_hud() -> void:
 func _update_objective_and_progress() -> void:
 	var cfg = _get_current_config()
 	var target = cfg["target_score"]
+
 	if current_stage_idx >= STAGE_CONFIGS.size():
-		objective_label.text = "MODO INFINITO | RECORDE: %d" % high_score
+		objective_label.text = "♾️ MODO INFINITO | RECORDE: %d" % high_score
 		stage_progress_bar.max_value = 1000
 		stage_progress_bar.value = score % 1000
+		objective_label.add_theme_color_override("font_color", Color(0.9, 0.4, 1.0))
 	else:
-		objective_label.text = "META: %d PONTOS (%d/%d)" % [target, mini(score, target), target]
 		stage_progress_bar.max_value = target
 		stage_progress_bar.value = score
+
+		var remaining = target - score
+		if remaining <= 0:
+			objective_label.text = "🎉 OBJETIVO CONCLUÍDO! (%d/%d)" % [score, target]
+			objective_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.55))
+		elif remaining <= int(target * 0.15) or remaining <= 80:
+			# Reta Final! Alerta dourado de alta empolgação
+			objective_label.text = "⚡ RETA FINAL! FALTAM %d PTS! (%d/%d)" % [remaining, score, target]
+			objective_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
+		else:
+			var pct = int(float(score) / float(target) * 100.0)
+			objective_label.text = "🎯 META: %d PTS (%d/%d - %d%%)" % [target, score, target, pct]
+			objective_label.add_theme_color_override("font_color", Color(0.85, 0.92, 1.0, 0.9))
 
 func _get_current_config() -> Dictionary:
 	if current_stage_idx < STAGE_CONFIGS.size():
@@ -1611,7 +1718,13 @@ func _get_current_config() -> Dictionary:
 	return {
 		"stage": 99,
 		"title": "MODO INFINITO ♾️",
+		"mission_title": "SOBREVIVÊNCIA MÁXIMA",
+		"mission_desc": "Desvie de projéteis e sobreviva o máximo que puder para bater o recorde global!",
+		"mission_tip": "💡 Quanto mais tempo você sobrevive, maior o bônus de moedas acumulado.",
 		"target_score": 99999,
+		"star_1": 1000,
+		"star_2": 2500,
+		"star_3": 5000,
 		"has_turret": true,
 		"palette": {
 			"name": "COSMIC PURPLE",
@@ -1671,4 +1784,4 @@ func _on_retry_pressed() -> void:
 		return
 	game_over_panel.visible = false
 	_update_dimmer()
-	_start_stage(current_stage_idx)
+	_show_stage_briefing(current_stage_idx)

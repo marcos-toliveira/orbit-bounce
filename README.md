@@ -12,8 +12,8 @@ Desenvolvido com física vetorial matemática precisa e renderização gráfica 
 
 ## 📱 Downloads Oficiais (Android e Web)
 
-- 📲 **[Baixar APK Android (v1.0.0-rc.3)](https://github.com/marcos-toliveira/orbit-bounce/releases/download/v1.0.0-rc.3/orbit-bounce.apk)**
-- 🌐 **[Baixar Pacote Web HTML5/WASM (v1.0.0-rc.3)](https://github.com/marcos-toliveira/orbit-bounce/releases/download/v1.0.0-rc.3/orbit-bounce-web.zip)**
+- 📲 **[Baixar APK Android (v1.0.0-rc.4)](https://github.com/marcos-toliveira/orbit-bounce/releases/download/v1.0.0-rc.4/orbit-bounce.apk)**
+- 🌐 **[Baixar Pacote Web HTML5/WASM (v1.0.0-rc.4)](https://github.com/marcos-toliveira/orbit-bounce/releases/download/v1.0.0-rc.4/orbit-bounce-web.zip)**
 - 📦 **[Ver Histórico Completo de Releases](https://github.com/marcos-toliveira/orbit-bounce/releases)**
 
 ---
@@ -54,6 +54,10 @@ Desenvolvido com física vetorial matemática precisa e renderização gráfica 
   - Navegue e jogue qualquer fase já desbloqueada para bater recordes.
   - Avaliação de desempenho por estrelas (⭐ / ⭐⭐ / ⭐⭐⭐) em cada fase.
   - Modo Infinito ♾️ liberado após zerar a Campanha.
+- **Briefing de Fases & Metas Calibradas (Clareza Total de Objetivo):**
+  - Antes de a bolinha entrar em jogo, uma tela de briefing apresenta o nome da fase, a missão temática, a meta de pontuação (400 a 1900 pts calibrados para 60-90s de ação), os limiares de estrelas e dicas táticas.
+  - Alerta de **"Reta Final!"** no HUD quando faltam poucos pontos para a vitória.
+  - Celebração triunfal com slow-motion e fogos dourados ao bater a meta (`🎯 OBJETIVO CONCLUÍDO!`), eliminando cortes abruptos de fase!
 - **HUD Centralizado e Números Flutuantes (Score Popups):**
   - Placar gigante posicionado estrategicamente logo acima da arena circular, facilitando a visualização durante o calor da partida.
   - Efeitos de texto flutuante em tempo real (`+25`, `+15 🪙`, `+150 💥`, `MULTIBALL! 🟡`) que saltam da posição exata do impacto.
