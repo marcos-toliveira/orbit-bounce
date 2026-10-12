@@ -1,8 +1,8 @@
 extends Node2D
 
 # ==============================================================================
-# ORBIT BOUNCE (PONG CIRCULAR) - EVOLUTION 5.0
-# Etapa 1: Economia, Persistência, Loja de Skins Cosméticas & Rewarded Ad Loop
+# ORBIT BOUNCE (PONG CIRCULAR) - EVOLUTION 6.0
+# Sistema de Vidas (Candy Crush Style), Mapa de Fases, Modais Sólidos e HUD Central
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
@@ -46,6 +46,14 @@ class Particle:
 	var life: float
 	var max_life: float
 	var size: float
+
+class FloatingScore:
+	var pos: Vector2
+	var text: String
+	var color: Color
+	var life: float = 0.0
+	var max_life: float = 0.85
+	var font_size: int = 24
 
 class SquareBlock:
 	var rect: Rect2
@@ -95,13 +103,12 @@ class TurretBoss:
 	var shoot_interval: float = 2.4
 
 # ------------------------------------------------------------------------------
-# 3. DEFINIÇÃO DAS 5 FASES
+# 3. DEFINIÇÃO DAS 5 FASES DA CAMPANHA
 # ------------------------------------------------------------------------------
 const STAGE_CONFIGS = [
 	{
 		"stage": 1,
 		"title": "FASE 1: O DESPERTAR",
-		"start_score": 0,
 		"target_score": 150,
 		"has_turret": false,
 		"palette": {
@@ -114,34 +121,31 @@ const STAGE_CONFIGS = [
 	{
 		"stage": 2,
 		"title": "FASE 2: PODERES & FEITIÇOS",
-		"start_score": 150,
-		"target_score": 350,
+		"target_score": 220,
 		"has_turret": false,
 		"palette": {
-			"name": "SYNTH PURPLE",
-			"paddle": Color(0.95, 0.25, 0.88),
-			"arena": Color(0.35, 0.14, 0.35, 0.7),
-			"accent": Color(0.9, 0.3, 0.9)
+			"name": "PURPLE NEON",
+			"paddle": Color(0.85, 0.25, 1.0),
+			"arena": Color(0.28, 0.12, 0.38, 0.7),
+			"accent": Color(0.9, 0.4, 1.0)
 		}
 	},
 	{
 		"stage": 3,
-		"title": "FASE 3: TORRE DE PLASMA",
-		"start_score": 350,
-		"target_score": 680,
+		"title": "FASE 3: PINBALL & BUMPERS",
+		"target_score": 300,
 		"has_turret": true,
 		"palette": {
 			"name": "ELECTRIC BLUE",
-			"paddle": Color(0.2, 0.75, 1.0),
-			"arena": Color(0.12, 0.25, 0.45, 0.7),
-			"accent": Color(0.3, 0.85, 1.0)
+			"paddle": Color(0.2, 0.55, 1.0),
+			"arena": Color(0.10, 0.18, 0.42, 0.7),
+			"accent": Color(0.35, 0.75, 1.0)
 		}
 	},
 	{
 		"stage": 4,
 		"title": "FASE 4: CAOS TRIPLO & FOGO",
-		"start_score": 680,
-		"target_score": 1100,
+		"target_score": 400,
 		"has_turret": false,
 		"palette": {
 			"name": "EMERALD LIME",
@@ -153,8 +157,7 @@ const STAGE_CONFIGS = [
 	{
 		"stage": 5,
 		"title": "FASE 5: A HÉLICE & FORTALEZA",
-		"start_score": 1100,
-		"target_score": 1700,
+		"target_score": 500,
 		"has_turret": true,
 		"palette": {
 			"name": "SOLAR AMBER",
@@ -169,22 +172,36 @@ const STAGE_CONFIGS = [
 # 4. VARIÁVEIS DE ESTADO E PERSISTÊNCIA
 # ------------------------------------------------------------------------------
 const SAVE_PATH = "user://orbit_bounce_save.json"
+const MAX_LIVES = 5
+const LIFE_RECHARGE_SECONDS = 180 # 3 minutos para recarregar 1 vida
 
-enum GameState { PLAYING, GAME_OVER, CAMPAIGN_CLEAR }
-var current_state: GameState = GameState.PLAYING
+enum GameState { MAP, PLAYING, STAGE_CLEAR, GAME_OVER, VICTORY }
+var current_state: GameState = GameState.MAP
 
 var arena_center: Vector2 = Vector2.ZERO
 var paddle_angle: float = -PI / 2.0
 var target_paddle_angle: float = -PI / 2.0
 var is_dragging: bool = false
 
-# Persistência do Jogador
+# Dados Persistentes do Jogador
 var total_coins_bank: int = 0
 var high_score: int = 0
+var lives: int = 5
+var last_life_timestamp: int = 0
+var unlocked_stage: int = 0
+var stage_high_scores: Dictionary = {}
+var stage_stars: Dictionary = {}
 var unlocked_skins: Array = ["classic"]
 var equipped_skin: String = "classic"
 
-# Modificadores da Partida
+# Estado da Rodada Atual
+var current_stage_idx: int = 0
+var score: int = 0
+var coins: int = 0
+var run_coins_collected: int = 0
+var screen_shake: float = 0.0
+var dynamic_spawn_timer: float = 0.0
+
 var paddle_arc_current: float = 54.0
 var paddle_buff_timer: float = 0.0
 var paddle_buff_type: String = "normal"
@@ -192,11 +209,11 @@ var paddle_stun_timer: float = 0.0
 var revive_shield_timer: float = 0.0
 var has_revived_this_run: bool = false
 var has_doubled_coins_this_run: bool = false
-var run_coins_collected: int = 0
 
 # Entidades ativas
 var balls: Array[Ball] = []
 var particles: Array[Particle] = []
+var floating_scores: Array[FloatingScore] = []
 var square_blocks: Array[SquareBlock] = []
 var coins_items: Array[CoinItem] = []
 var bumpers: Array[Bumper] = []
@@ -204,13 +221,6 @@ var helix: HelixObstacle = null
 var active_special_orbs: Array[SpecialOrb] = []
 var turret: TurretBoss = null
 var turret_bullets: Array[TurretBullet] = []
-
-# Progresso & Spawner Contínuo
-var current_stage_idx: int = 0
-var score: int = 0
-var coins: int = 0
-var screen_shake: float = 0.0
-var dynamic_spawn_timer: float = 0.0
 
 # Sistema de Áudio Procedural
 var audio_player: AudioStreamPlayer
@@ -223,37 +233,64 @@ var sfx_fireball: AudioStreamWAV
 var sfx_turret_shot: AudioStreamWAV
 var sfx_gameover: AudioStreamWAV
 
-# Referências de UI
-@onready var wave_label: Label = $HUD/TopBar/VBoxContainer/HBoxContainer/WaveLabel
-@onready var score_label: Label = $HUD/TopBar/VBoxContainer/HBoxContainer/ScoreLabel
-@onready var coins_label: Label = $HUD/TopBar/VBoxContainer/HBoxContainer/CoinsLabel
-@onready var top_shop_button: Button = $HUD/TopBar/VBoxContainer/HBoxContainer/TopShopButton
-@onready var objective_label: Label = $HUD/TopBar/VBoxContainer/ObjectiveLabel
-@onready var stage_progress_bar: ProgressBar = $HUD/TopBar/VBoxContainer/StageProgressBar
+# Referências de UI (HUD do Jogo)
+@onready var dimmer_overlay: ColorRect = $HUD/DimmerOverlay
+@onready var game_hud: Control = $HUD/GameHUD
+@onready var lives_label: Label = $HUD/GameHUD/TopBar/HBoxContainer/LivesLabel
+@onready var stage_name_label: Label = $HUD/GameHUD/TopBar/HBoxContainer/StageNameLabel
+@onready var coins_label: Label = $HUD/GameHUD/TopBar/HBoxContainer/CoinsLabel
+@onready var map_button: Button = $HUD/GameHUD/TopBar/HBoxContainer/MapButton
+
+@onready var big_score_label: Label = $HUD/GameHUD/CenterScoreHUD/BigScoreLabel
+@onready var stage_progress_bar: ProgressBar = $HUD/GameHUD/CenterScoreHUD/StageProgressBar
+@onready var objective_label: Label = $HUD/GameHUD/CenterScoreHUD/ObjectiveLabel
 @onready var wave_banner: Label = $HUD/WaveBanner
 
-# UI Game Over & Rewarded
+# UI Mapa de Fases
+@onready var level_map_panel: PanelContainer = $HUD/LevelMapPanel
+@onready var map_lives_label: Label = $HUD/LevelMapPanel/MarginContainer/VBoxContainer/SubBar/MapLivesLabel
+@onready var map_coins_label: Label = $HUD/LevelMapPanel/MarginContainer/VBoxContainer/SubBar/MapCoinsLabel
+@onready var map_buy_lives_btn: Button = $HUD/LevelMapPanel/MarginContainer/VBoxContainer/SubBar/MapBuyLivesBtn
+@onready var map_shop_btn: Button = $HUD/LevelMapPanel/MarginContainer/VBoxContainer/SubBar/MapShopBtn
+@onready var stage_cards_container: VBoxContainer = $HUD/LevelMapPanel/MarginContainer/VBoxContainer/ScrollContainer/StageCardsContainer
+@onready var close_map_button: Button = $HUD/LevelMapPanel/MarginContainer/VBoxContainer/CloseMapButton
+
+# UI Game Over
 @onready var game_over_panel: PanelContainer = $HUD/GameOverPanel
-@onready var final_score_label: Label = $HUD/GameOverPanel/MarginContainer/VBoxContainer/FinalScoreLabel
-@onready var high_score_label: Label = $HUD/GameOverPanel/MarginContainer/VBoxContainer/HighScoreLabel
-@onready var waves_cleared_label: Label = $HUD/GameOverPanel/MarginContainer/VBoxContainer/WavesClearedLabel
+@onready var big_final_score_label: Label = $HUD/GameOverPanel/MarginContainer/VBoxContainer/BigFinalScoreLabel
+@onready var stage_record_label: Label = $HUD/GameOverPanel/MarginContainer/VBoxContainer/StageRecordLabel
+@onready var coins_saved_label: Label = $HUD/GameOverPanel/MarginContainer/VBoxContainer/CoinsSavedLabel
+@onready var lives_status_label: Label = $HUD/GameOverPanel/MarginContainer/VBoxContainer/LivesStatusLabel
 @onready var revive_button: Button = $HUD/GameOverPanel/MarginContainer/VBoxContainer/ReviveButton
 @onready var double_coins_button: Button = $HUD/GameOverPanel/MarginContainer/VBoxContainer/DoubleCoinsButton
+@onready var retry_stage_button: Button = $HUD/GameOverPanel/MarginContainer/VBoxContainer/RetryStageButton
+@onready var game_over_map_button: Button = $HUD/GameOverPanel/MarginContainer/VBoxContainer/GameOverMapButton
 @onready var game_over_shop_button: Button = $HUD/GameOverPanel/MarginContainer/VBoxContainer/GameOverShopButton
-@onready var restart_button: Button = $HUD/GameOverPanel/MarginContainer/VBoxContainer/RestartButton
 
-# UI Loja de Skins
+# UI Fase Concluída (Stage Clear)
+@onready var stage_clear_panel: PanelContainer = $HUD/StageClearPanel
+@onready var stage_stars_label: Label = $HUD/StageClearPanel/MarginContainer/VBoxContainer/StageStarsLabel
+@onready var stage_clear_score_label: Label = $HUD/StageClearPanel/MarginContainer/VBoxContainer/StageClearScoreLabel
+@onready var stage_clear_bonus_label: Label = $HUD/StageClearPanel/MarginContainer/VBoxContainer/StageClearBonusLabel
+@onready var stage_clear_unlock_label: Label = $HUD/StageClearPanel/MarginContainer/VBoxContainer/StageClearUnlockLabel
+@onready var next_stage_button: Button = $HUD/StageClearPanel/MarginContainer/VBoxContainer/NextStageButton
+@onready var stage_clear_map_button: Button = $HUD/StageClearPanel/MarginContainer/VBoxContainer/StageClearMapButton
+
+# UI Loja
 @onready var shop_panel: PanelContainer = $HUD/ShopPanel
 @onready var shop_coins_label: Label = $HUD/ShopPanel/MarginContainer/VBoxContainer/ShopCoinsLabel
+@onready var buy_lives_btn: Button = $HUD/ShopPanel/MarginContainer/VBoxContainer/BuyLivesBtn
+@onready var free_life_ad_btn: Button = $HUD/ShopPanel/MarginContainer/VBoxContainer/FreeLifeAdBtn
 @onready var skin_classic_btn: Button = $HUD/ShopPanel/MarginContainer/VBoxContainer/SkinClassicBtn
 @onready var skin_fire_btn: Button = $HUD/ShopPanel/MarginContainer/VBoxContainer/SkinFireBtn
 @onready var skin_synth_btn: Button = $HUD/ShopPanel/MarginContainer/VBoxContainer/SkinSynthBtn
 @onready var skin_rainbow_btn: Button = $HUD/ShopPanel/MarginContainer/VBoxContainer/SkinRainbowBtn
 @onready var close_shop_button: Button = $HUD/ShopPanel/MarginContainer/VBoxContainer/CloseShopButton
 
-# UI Vitória
+# UI Vitória na Campanha
 @onready var victory_panel: PanelContainer = $HUD/VictoryPanel
 @onready var total_score_label: Label = $HUD/VictoryPanel/MarginContainer/VBoxContainer/TotalScoreLabel
+@onready var victory_map_button: Button = $HUD/VictoryPanel/MarginContainer/VBoxContainer/VictoryMapButton
 @onready var infinite_button: Button = $HUD/VictoryPanel/MarginContainer/VBoxContainer/InfiniteButton
 
 # ------------------------------------------------------------------------------
@@ -264,31 +301,147 @@ func _ready() -> void:
 	_update_center_pos()
 	get_viewport().size_changed.connect(_update_center_pos)
 
+	_apply_modal_styles()
 	_load_profile()
+	_check_lives_recharge()
 
 	# Conexões de Botões
-	restart_button.pressed.connect(start_new_campaign)
-	infinite_button.pressed.connect(start_infinite_mode)
+	map_button.pressed.connect(_open_map)
+	close_map_button.pressed.connect(_close_map)
+	map_buy_lives_btn.pressed.connect(_open_shop)
+	map_shop_btn.pressed.connect(_open_shop)
+
+	retry_stage_button.pressed.connect(_on_retry_pressed)
 	revive_button.pressed.connect(_on_revive_pressed)
 	double_coins_button.pressed.connect(_on_double_coins_pressed)
-	top_shop_button.pressed.connect(_open_shop)
+	game_over_map_button.pressed.connect(_open_map)
 	game_over_shop_button.pressed.connect(_open_shop)
+
+	next_stage_button.pressed.connect(_on_next_stage_pressed)
+	stage_clear_map_button.pressed.connect(_open_map)
+
+	victory_map_button.pressed.connect(_open_map)
+	infinite_button.pressed.connect(start_infinite_mode)
+
 	close_shop_button.pressed.connect(_close_shop)
+	buy_lives_btn.pressed.connect(_buy_lives_with_coins)
+	free_life_ad_btn.pressed.connect(_gain_free_life)
 
 	skin_classic_btn.pressed.connect(func(): _select_skin("classic", 0))
 	skin_fire_btn.pressed.connect(func(): _select_skin("fire", 40))
 	skin_synth_btn.pressed.connect(func(): _select_skin("synth", 70))
 	skin_rainbow_btn.pressed.connect(func(): _select_skin("rainbow", 120))
 
-	start_new_campaign()
+	# Abre o Mapa de Fases ao iniciar
+	_open_map()
 
 func _update_center_pos() -> void:
 	arena_center = get_viewport_rect().size / 2.0
 
+func _apply_modal_styles() -> void:
+	_style_panel(level_map_panel, Color(0.18, 0.75, 1.0, 1.0))
+	_style_panel(game_over_panel, Color(1.0, 0.35, 0.45, 1.0))
+	_style_panel(stage_clear_panel, Color(0.2, 1.0, 0.55, 1.0))
+	_style_panel(shop_panel, Color(1.0, 0.85, 0.25, 1.0))
+	_style_panel(victory_panel, Color(1.0, 0.8, 0.2, 1.0))
+
+func _style_panel(panel: PanelContainer, border_col: Color) -> void:
+	var sb = StyleBoxFlat.new()
+	sb.bg_color = Color(0.06, 0.08, 0.12, 0.98) # Fundo sólido super escuro
+	sb.border_color = border_col
+	sb.set_border_width_all(3)
+	sb.set_corner_radius_all(18)
+	sb.content_margin_left = 22
+	sb.content_margin_top = 22
+	sb.content_margin_right = 22
+	sb.content_margin_bottom = 22
+	panel.add_theme_stylebox_override("panel", sb)
+
+func _update_dimmer() -> void:
+	var any_modal = level_map_panel.visible or game_over_panel.visible or stage_clear_panel.visible or shop_panel.visible or victory_panel.visible
+	dimmer_overlay.visible = any_modal
+	dimmer_overlay.mouse_filter = Control.MOUSE_FILTER_STOP if any_modal else Control.MOUSE_FILTER_IGNORE
+
+# ------------------------------------------------------------------------------
+# 6. SISTEMA DE VIDAS (CANDY CRUSH STYLE) & TIMER
+# ------------------------------------------------------------------------------
+func _check_lives_recharge() -> void:
+	var now = int(Time.get_unix_time_from_system())
+	if lives >= MAX_LIVES:
+		last_life_timestamp = now
+		return
+
+	if last_life_timestamp <= 0:
+		last_life_timestamp = now
+
+	var elapsed = now - last_life_timestamp
+	if elapsed >= LIFE_RECHARGE_SECONDS:
+		var gained = int(elapsed / LIFE_RECHARGE_SECONDS)
+		lives = mini(lives + gained, MAX_LIVES)
+		if lives >= MAX_LIVES:
+			last_life_timestamp = now
+		else:
+			last_life_timestamp = now - (elapsed % LIFE_RECHARGE_SECONDS)
+		_save_profile()
+
+func _get_lives_text() -> String:
+	_check_lives_recharge()
+	if lives >= MAX_LIVES:
+		return "❤️ %d/%d (CHEIO)" % [lives, MAX_LIVES]
+
+	var now = int(Time.get_unix_time_from_system())
+	var elapsed = now - last_life_timestamp
+	var rem = maxi(0, LIFE_RECHARGE_SECONDS - elapsed)
+	var mins = int(rem / 60)
+	var secs = int(rem % 60)
+	return "❤️ %d/%d (+1 em %02d:%02d)" % [lives, MAX_LIVES, mins, secs]
+
+func _buy_lives_with_coins() -> void:
+	var cost = 30
+	var total_avail = total_coins_bank + coins
+	if total_avail >= cost:
+		if coins >= cost:
+			coins -= cost
+		else:
+			var rem = cost - coins
+			coins = 0
+			total_coins_bank -= rem
+
+		lives = MAX_LIVES
+		last_life_timestamp = int(Time.get_unix_time_from_system())
+		_save_profile()
+		_play_sfx(sfx_powerup)
+		_trigger_firework(arena_center, Color(1.0, 0.35, 0.45), 30)
+		_spawn_floating_text(arena_center, "+5 VIDAS! ❤️", Color(1.0, 0.35, 0.45), 30)
+		_update_hud()
+		_update_shop_ui()
+		_update_map_ui()
+	else:
+		_play_sfx(sfx_poison)
+		_spawn_floating_text(arena_center, "Moedas insuficientes!", Color.RED, 22)
+
+func _gain_free_life() -> void:
+	lives = mini(lives + 1, MAX_LIVES)
+	last_life_timestamp = int(Time.get_unix_time_from_system())
+	_save_profile()
+	_play_sfx(sfx_powerup)
+	_spawn_floating_text(arena_center, "+1 VIDA GRÁTIS! ❤️", Color(0.2, 1.0, 0.5), 26)
+	_update_hud()
+	_update_shop_ui()
+	_update_map_ui()
+
+# ------------------------------------------------------------------------------
+# 7. PERSISTÊNCIA EM DISCO
+# ------------------------------------------------------------------------------
 func _save_profile() -> void:
 	var data = {
 		"total_coins_bank": total_coins_bank,
 		"high_score": high_score,
+		"lives": lives,
+		"last_life_timestamp": last_life_timestamp,
+		"unlocked_stage": unlocked_stage,
+		"stage_high_scores": stage_high_scores,
+		"stage_stars": stage_stars,
 		"unlocked_skins": unlocked_skins,
 		"equipped_skin": equipped_skin
 	}
@@ -306,77 +459,58 @@ func _load_profile() -> void:
 			var d = json.data
 			total_coins_bank = int(d.get("total_coins_bank", 0))
 			high_score = int(d.get("high_score", 0))
+			lives = int(d.get("lives", 5))
+			last_life_timestamp = int(d.get("last_life_timestamp", 0))
+			unlocked_stage = int(d.get("unlocked_stage", 0))
+			stage_high_scores = d.get("stage_high_scores", {})
+			stage_stars = d.get("stage_stars", {})
 			unlocked_skins = Array(d.get("unlocked_skins", ["classic"]))
 			equipped_skin = String(d.get("equipped_skin", "classic"))
 
 # ------------------------------------------------------------------------------
-# 6. SISTEMA DE SOM PROCEDURAL SINTETIZADO
+# 8. SÍNTESE DE ÁUDIO 8-BIT PROCEDURAL
 # ------------------------------------------------------------------------------
 func _init_procedural_audio() -> void:
 	audio_player = AudioStreamPlayer.new()
-	audio_player.max_polyphony = 6
 	add_child(audio_player)
 
-	sfx_bounce = _synth_tone(320.0, 580.0, 0.08, "sine")
-	sfx_brick = _synth_tone(420.0, 160.0, 0.07, "square")
-	sfx_coin = _synth_arpeggio([880.0, 1320.0], 0.10)
-	sfx_powerup = _synth_arpeggio([523.0, 659.0, 784.0, 1046.0], 0.20)
-	sfx_poison = _synth_tone(450.0, 180.0, 0.22, "saw")
-	sfx_fireball = _synth_tone(180.0, 380.0, 0.25, "noise")
-	sfx_turret_shot = _synth_tone(850.0, 220.0, 0.09, "saw")
-	sfx_gameover = _synth_arpeggio([392.0, 349.0, 311.0, 261.0], 0.45)
+	sfx_bounce = _generate_tone(220.0, 360.0, 0.08, "sine")
+	sfx_brick = _generate_tone(180.0, 110.0, 0.12, "square")
+	sfx_coin = _generate_tone(580.0, 880.0, 0.15, "triangle")
+	sfx_powerup = _generate_tone(320.0, 680.0, 0.28, "square")
+	sfx_poison = _generate_tone(260.0, 120.0, 0.32, "sawtooth")
+	sfx_fireball = _generate_tone(140.0, 420.0, 0.22, "noise")
+	sfx_turret_shot = _generate_tone(440.0, 180.0, 0.14, "square")
+	sfx_gameover = _generate_tone(320.0, 90.0, 0.55, "sawtooth")
 
 func _play_sfx(stream: AudioStreamWAV) -> void:
-	if stream != null:
+	if stream != null and audio_player != null:
 		audio_player.stream = stream
 		audio_player.play()
 
-func _synth_tone(f_start: float, f_end: float, duration: float, wave_type: String) -> AudioStreamWAV:
-	var rate: int = 22050
-	var samples_count: int = int(duration * rate)
+func _generate_tone(freq_start: float, freq_end: float, duration: float, wave_type: String) -> AudioStreamWAV:
+	var rate = 22050
+	var sample_count = int(duration * rate)
 	var data = PackedByteArray()
-	data.resize(samples_count)
-	var phase: float = 0.0
+	data.resize(sample_count)
 
-	for i in range(samples_count):
-		var t = float(i) / float(samples_count)
-		var freq = lerpf(f_start, f_end, t)
-		phase += (freq * TAU) / float(rate)
-		var val: float = 0.0
+	var phase = 0.0
+	for i in range(sample_count):
+		var t = float(i) / float(sample_count)
+		var cur_freq = lerpf(freq_start, freq_end, t)
+		phase += TAU * cur_freq / float(rate)
+		if phase > TAU:
+			phase -= TAU
 
-		if wave_type == "sine":
-			val = sin(phase)
-		elif wave_type == "square":
-			val = 0.8 if sin(phase) > 0.0 else -0.8
-		elif wave_type == "saw":
-			val = fmod(phase / TAU, 1.0) * 2.0 - 1.0
-		elif wave_type == "noise":
-			val = (sin(phase) * 0.4) + randf_range(-0.5, 0.5)
+		var val = 0.0
+		match wave_type:
+			"sine": val = sin(phase)
+			"square": val = 1.0 if sin(phase) >= 0.0 else -1.0
+			"triangle": val = 2.0 * abs(2.0 * (phase / TAU - floor(phase / TAU + 0.5))) - 1.0
+			"sawtooth": val = 2.0 * (phase / TAU - floor(phase / TAU + 0.5))
+			"noise": val = randf_range(-1.0, 1.0)
 
-		var env: float = 1.0 - t
-		val = clampf(val * env, -1.0, 1.0)
-		data[i] = int((val * 0.5 + 0.5) * 255.0)
-
-	var wav = AudioStreamWAV.new()
-	wav.format = AudioStreamWAV.FORMAT_8_BITS
-	wav.mix_rate = rate
-	wav.data = data
-	return wav
-
-func _synth_arpeggio(notes: Array, total_dur: float) -> AudioStreamWAV:
-	var rate: int = 22050
-	var samples_count: int = int(total_dur * rate)
-	var data = PackedByteArray()
-	data.resize(samples_count)
-	var note_dur = total_dur / float(notes.size())
-
-	for i in range(samples_count):
-		var time = float(i) / float(rate)
-		var note_idx = mini(int(time / note_dur), notes.size() - 1)
-		var freq: float = notes[note_idx]
-		var phase = time * freq * TAU
-		var val = sin(phase)
-		var env = 1.0 - fmod(time, note_dur) / note_dur
+		var env = 1.0 - t
 		val = clampf(val * env, -1.0, 1.0)
 		data[i] = int((val * 0.5 + 0.5) * 255.0)
 
@@ -387,18 +521,189 @@ func _synth_arpeggio(notes: Array, total_dur: float) -> AudioStreamWAV:
 	return wav
 
 # ------------------------------------------------------------------------------
-# 7. LOJA DE SKINS & SISTEMA REWARDED (REVIVER & DOBRAR MOEDAS)
+# 9. SISTEMA DE MAPA DE FASES (LEVEL PROGRESSION MAP)
+# ------------------------------------------------------------------------------
+func _open_map() -> void:
+	current_state = GameState.MAP
+	_hide_all_modals()
+	_update_map_ui()
+	level_map_panel.visible = true
+	_update_dimmer()
+
+func _close_map() -> void:
+	level_map_panel.visible = false
+	_update_dimmer()
+	if current_state == GameState.MAP:
+		_start_stage(current_stage_idx)
+
+func _update_map_ui() -> void:
+	map_lives_label.text = _get_lives_text()
+	map_coins_label.text = "🪙 %d" % (total_coins_bank + coins)
+
+	# Limpa cartões anteriores
+	for child in stage_cards_container.get_children():
+		child.queue_free()
+
+	# Gera cartões para as 5 fases da campanha
+	for idx in range(STAGE_CONFIGS.size()):
+		var cfg = STAGE_CONFIGS[idx]
+		var card = _create_stage_card(idx, cfg["title"], cfg["target_score"])
+		stage_cards_container.add_child(card)
+
+	# Cartão do Modo Infinito
+	var infinite_card = _create_infinite_card()
+	stage_cards_container.add_child(infinite_card)
+
+func _create_stage_card(stage_idx: int, title: String, target: int) -> PanelContainer:
+	var card = PanelContainer.new()
+	var is_unlocked = (stage_idx <= unlocked_stage)
+	var stage_key = str(stage_idx)
+	var best_score = stage_high_scores.get(stage_key, 0)
+	var stars_count = stage_stars.get(stage_key, 0)
+
+	var border_col = Color(0.2, 0.8, 1.0) if is_unlocked else Color(0.25, 0.28, 0.35)
+	var bg_col = Color(0.09, 0.12, 0.18, 0.95) if is_unlocked else Color(0.05, 0.06, 0.08, 0.95)
+
+	var sb = StyleBoxFlat.new()
+	sb.bg_color = bg_col
+	sb.border_color = border_col
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(12)
+	sb.content_margin_left = 16
+	sb.content_margin_top = 14
+	sb.content_margin_right = 16
+	sb.content_margin_bottom = 14
+	card.add_theme_stylebox_override("panel", sb)
+
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 6)
+	card.add_child(vbox)
+
+	var hbox_top = HBoxContainer.new()
+	vbox.add_child(hbox_top)
+
+	var title_lbl = Label.new()
+	title_lbl.text = title
+	title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_lbl.add_theme_font_size_override("font_size", 18)
+	title_lbl.add_theme_color_override("font_color", Color(0.3, 0.92, 1.0) if is_unlocked else Color(0.5, 0.55, 0.65))
+	hbox_top.add_child(title_lbl)
+
+	var stars_str = "☆☆☆"
+	if stars_count == 1: stars_str = "⭐☆☆"
+	elif stars_count == 2: stars_str = "⭐⭐☆"
+	elif stars_count >= 3: stars_str = "⭐⭐⭐"
+
+	var stars_lbl = Label.new()
+	stars_lbl.text = stars_str if is_unlocked else "🔒"
+	stars_lbl.add_theme_font_size_override("font_size", 18)
+	stars_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
+	hbox_top.add_child(stars_lbl)
+
+	var hbox_sub = HBoxContainer.new()
+	vbox.add_child(hbox_sub)
+
+	var info_lbl = Label.new()
+	info_lbl.text = "Meta: %d pts  |  Recorde: %d pts" % [target, best_score] if is_unlocked else "Bloqueada. Vença a fase anterior!"
+	info_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info_lbl.add_theme_font_size_override("font_size", 14)
+	info_lbl.add_theme_color_override("font_color", Color(0.75, 0.8, 0.9) if is_unlocked else Color(0.4, 0.45, 0.5))
+	hbox_sub.add_child(info_lbl)
+
+	var play_btn = Button.new()
+	play_btn.custom_minimum_size = Vector2(100, 38)
+	play_btn.add_theme_font_size_override("font_size", 15)
+	if is_unlocked:
+		play_btn.text = "JOGAR ▶"
+		play_btn.pressed.connect(func(): _select_stage_from_map(stage_idx))
+	else:
+		play_btn.text = "🔒"
+		play_btn.disabled = true
+	hbox_sub.add_child(play_btn)
+
+	return card
+
+func _create_infinite_card() -> PanelContainer:
+	var card = PanelContainer.new()
+	var is_unlocked = (unlocked_stage >= 4)
+	var best_score = stage_high_scores.get("infinite", 0)
+
+	var sb = StyleBoxFlat.new()
+	sb.bg_color = Color(0.12, 0.10, 0.18, 0.95) if is_unlocked else Color(0.05, 0.05, 0.07, 0.95)
+	sb.border_color = Color(1.0, 0.8, 0.2) if is_unlocked else Color(0.25, 0.25, 0.3)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(12)
+	sb.content_margin_left = 16
+	sb.content_margin_top = 14
+	sb.content_margin_right = 16
+	sb.content_margin_bottom = 14
+	card.add_theme_stylebox_override("panel", sb)
+
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 6)
+	card.add_child(vbox)
+
+	var hbox = HBoxContainer.new()
+	vbox.add_child(hbox)
+
+	var title_lbl = Label.new()
+	title_lbl.text = "MODO INFINITO ♾️"
+	title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_lbl.add_theme_font_size_override("font_size", 18)
+	title_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.25) if is_unlocked else Color(0.5, 0.5, 0.5))
+	hbox.add_child(title_lbl)
+
+	var info_lbl = Label.new()
+	info_lbl.text = "Sobrevivência Máxima | Recorde: %d pts" % best_score if is_unlocked else "Complete a Fase 5 para liberar!"
+	info_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info_lbl.add_theme_font_size_override("font_size", 14)
+	info_lbl.add_theme_color_override("font_color", Color(0.8, 0.85, 0.9) if is_unlocked else Color(0.4, 0.45, 0.5))
+	vbox.add_child(info_lbl)
+
+	var play_btn = Button.new()
+	play_btn.custom_minimum_size = Vector2(0, 40)
+	play_btn.add_theme_font_size_override("font_size", 16)
+	if is_unlocked:
+		play_btn.text = "JOGAR MODO INFINITO ♾️"
+		play_btn.pressed.connect(start_infinite_mode)
+	else:
+		play_btn.text = "BLOQUEADO 🔒 (Vença a Fase 5)"
+		play_btn.disabled = true
+	vbox.add_child(play_btn)
+
+	return card
+
+func _select_stage_from_map(stage_idx: int) -> void:
+	if lives <= 0:
+		_open_shop()
+		_spawn_floating_text(arena_center, "Sem vidas! Recarregue na Loja ❤️", Color(1.0, 0.3, 0.4), 24)
+		return
+
+	level_map_panel.visible = false
+	_update_dimmer()
+	_start_stage(stage_idx)
+
+# ------------------------------------------------------------------------------
+# 10. LOJA DE SKINS & SISTEMA REWARDED
 # ------------------------------------------------------------------------------
 func _open_shop() -> void:
 	_update_shop_ui()
 	shop_panel.visible = true
+	_update_dimmer()
 
 func _close_shop() -> void:
 	shop_panel.visible = false
+	_update_dimmer()
+	if current_state == GameState.MAP:
+		_update_map_ui()
 
 func _update_shop_ui() -> void:
-	shop_coins_label.text = "Saldo Total: 🪙 %d" % (total_coins_bank + coins)
-	
+	shop_coins_label.text = "Saldo Total: 🪙 %d  |  %s" % [total_coins_bank + coins, _get_lives_text()]
+
+	var total_avail = total_coins_bank + coins
+	buy_lives_btn.text = "❤️ Recarregar +5 Vidas (30 Moedas)"
+	buy_lives_btn.disabled = (total_avail < 30 or lives >= MAX_LIVES)
+
 	_configure_skin_button(skin_classic_btn, "classic", "🔵 Ciano Clássico", 0)
 	_configure_skin_button(skin_fire_btn, "fire", "🔥 Fogo Solar", 40)
 	_configure_skin_button(skin_synth_btn, "synth", "🌸 Synthwave Rosa", 70)
@@ -448,11 +753,11 @@ func _on_revive_pressed() -> void:
 
 	has_revived_this_run = true
 	game_over_panel.visible = false
+	_update_dimmer()
 	current_state = GameState.PLAYING
 
-	# Spawna a bolinha de volta no centro com escudo protetor!
 	_spawn_ball(arena_center, randf() * TAU, ball_base_speed)
-	revive_shield_timer = 2.8 # 2.8 segundos de barreira protetora
+	revive_shield_timer = 2.8
 	paddle_arc_current = paddle_base_arc_degrees
 	paddle_buff_type = "normal"
 	paddle_stun_timer = 0.0
@@ -473,29 +778,16 @@ func _on_double_coins_pressed() -> void:
 
 	double_coins_button.text = "DOBRADO! (🪙 +%d) ✅" % bonus_coins
 	double_coins_button.disabled = true
-	final_score_label.text = "Pontuação: %d  |  Moedas: %d" % [score, coins]
+	coins_saved_label.text = "🪙 Moedas no Banco: %d (+%d dobradas!)" % [total_coins_bank + coins, bonus_coins]
 	_play_sfx(sfx_coin)
 	_trigger_firework(arena_center, Color(1.0, 0.85, 0.2), 30)
 
 # ------------------------------------------------------------------------------
-# 8. CICLO DE PARTIDA
+# 11. CONTROLE DE FASES E INÍCIO DE PARTIDA
 # ------------------------------------------------------------------------------
-func _get_current_palette() -> Dictionary:
-	var cfg = _get_current_config()
-	return cfg["palette"]
-
-func _get_current_config() -> Dictionary:
-	if current_stage_idx < STAGE_CONFIGS.size():
-		return STAGE_CONFIGS[current_stage_idx]
-	var loop_idx = (current_stage_idx - STAGE_CONFIGS.size()) % STAGE_CONFIGS.size()
-	return STAGE_CONFIGS[loop_idx]
-
-func start_new_campaign() -> void:
+func _start_stage(stage_idx: int) -> void:
+	_hide_all_modals()
 	current_state = GameState.PLAYING
-	game_over_panel.visible = false
-	victory_panel.visible = false
-	shop_panel.visible = false
-	wave_banner.visible = false
 
 	score = 0
 	coins = 0
@@ -509,7 +801,7 @@ func start_new_campaign() -> void:
 	double_coins_button.text = "🪙 2x MOEDAS DA PARTIDA"
 	double_coins_button.disabled = false
 
-	current_stage_idx = 0
+	current_stage_idx = stage_idx
 	paddle_angle = -PI / 2.0
 	target_paddle_angle = paddle_angle
 	screen_shake = 0.0
@@ -520,12 +812,22 @@ func start_new_campaign() -> void:
 	paddle_stun_timer = 0.0
 
 	particles.clear()
+	floating_scores.clear()
 	_load_stage(current_stage_idx)
 
 func start_infinite_mode() -> void:
-	victory_panel.visible = false
+	_hide_all_modals()
 	current_state = GameState.PLAYING
-	_load_stage(current_stage_idx)
+	current_stage_idx = 99
+	_start_stage(current_stage_idx)
+
+func _hide_all_modals() -> void:
+	level_map_panel.visible = false
+	game_over_panel.visible = false
+	stage_clear_panel.visible = false
+	shop_panel.visible = false
+	victory_panel.visible = false
+	_update_dimmer()
 
 func _load_stage(stage_idx: int) -> void:
 	square_blocks.clear()
@@ -548,15 +850,17 @@ func _load_stage(stage_idx: int) -> void:
 		turret.hp = 5
 		turret.max_hp = 5
 
-	match stage_idx % 5:
-		0: # Fase 1
+	var layout_idx = stage_idx if stage_idx < 5 else (stage_idx % 5)
+
+	match layout_idx:
+		0: # Fase 1: O Despertar
 			for p in [Vector2(-60, 0), Vector2(60, 0), Vector2(0, -60), Vector2(0, 60)]:
 				_create_square_block(arena_center + p - blk_size / 2.0, blk_size, palette["accent"])
 			_spawn_coin(arena_center + Vector2(-35, -35))
 			_spawn_coin(arena_center + Vector2(35, 35))
 			_spawn_special_orb(arena_center + Vector2(0, 45), "expand")
 
-		1: # Fase 2
+		1: # Fase 2: Poderes & Feitiços
 			for x in [-40, 0, 40]:
 				for y in [-25, 25]:
 					_create_square_block(arena_center + Vector2(x, y) - blk_size / 2.0, blk_size, palette["accent"])
@@ -564,7 +868,7 @@ func _load_stage(stage_idx: int) -> void:
 			_spawn_special_orb(arena_center + Vector2(-45, 0), "fireball")
 			_spawn_special_orb(arena_center + Vector2(45, 0), "poison")
 
-		2: # Fase 3 (Torre Atiradora + Bumpers)
+		2: # Fase 3: Pinball & Bumpers
 			_create_bumper(arena_center + Vector2(-85, 0), palette["paddle"])
 			_create_bumper(arena_center + Vector2(85, 0), palette["paddle"])
 			for i in range(5):
@@ -573,7 +877,7 @@ func _load_stage(stage_idx: int) -> void:
 				_create_square_block(pos, blk_size, palette["accent"])
 			_spawn_special_orb(arena_center + Vector2(0, -50), "fireball")
 
-		3: # Fase 4 (Multiball)
+		3: # Fase 4: Multiball & Fogo
 			for i in range(8):
 				var ang = i * (TAU / 8.0)
 				var pos = arena_center + Vector2.RIGHT.rotated(ang) * 85.0 - blk_size / 2.0
@@ -581,7 +885,7 @@ func _load_stage(stage_idx: int) -> void:
 			_spawn_special_orb(arena_center, "multiball")
 			_spawn_special_orb(arena_center + Vector2(-50, 0), "expand")
 
-		4: # Fase 5 (Hélice + Torre Central)
+		4: # Fase 5: Hélice & Torre Boss
 			helix = HelixObstacle.new()
 			helix.center = arena_center
 			helix.color = palette["accent"]
@@ -591,11 +895,11 @@ func _load_stage(stage_idx: int) -> void:
 				_create_square_block(pos, blk_size, palette["paddle"])
 			_spawn_special_orb(arena_center + Vector2(-60, -60), "fireball")
 
-	var spd = ball_base_speed + (stage_idx * 14.0)
+	var spd = ball_base_speed + (mini(stage_idx, 5) * 14.0)
 	_spawn_ball(arena_center, randf_range(0.0, TAU), spd)
 
-	wave_label.text = cfg["title"]
-	wave_label.add_theme_color_override("font_color", palette["paddle"])
+	stage_name_label.text = cfg["title"]
+	stage_name_label.add_theme_color_override("font_color", palette["paddle"])
 	_update_objective_and_progress()
 	_show_wave_banner(cfg["title"])
 	_update_hud()
@@ -630,6 +934,14 @@ func _spawn_special_orb(pos: Vector2, type: String) -> void:
 	s.type = type
 	active_special_orbs.append(s)
 
+func _spawn_floating_text(pos: Vector2, text: String, col: Color, sz: int = 24) -> void:
+	var ft = FloatingScore.new()
+	ft.pos = pos
+	ft.text = text
+	ft.color = col
+	ft.font_size = sz
+	floating_scores.append(ft)
+
 func _show_wave_banner(text: String) -> void:
 	wave_banner.text = text
 	wave_banner.visible = true
@@ -641,10 +953,10 @@ func _show_wave_banner(text: String) -> void:
 	tween.tween_callback(func(): wave_banner.visible = false)
 
 # ------------------------------------------------------------------------------
-# 9. ENTRADAS DE DADOS
+# 12. ENTRADAS DE DADOS
 # ------------------------------------------------------------------------------
 func _unhandled_input(event: InputEvent) -> void:
-	if current_state != GameState.PLAYING or shop_panel.visible:
+	if current_state != GameState.PLAYING or dimmer_overlay.visible:
 		return
 
 	if event is InputEventScreenTouch:
@@ -666,243 +978,217 @@ func _aim_at(screen_pos: Vector2) -> void:
 		target_paddle_angle = diff.angle()
 
 # ------------------------------------------------------------------------------
-# 10. FÍSICA E PROCESSAMENTO
+# 13. FÍSICA E PROCESSAMENTO (_process)
 # ------------------------------------------------------------------------------
-func _physics_process(delta: float) -> void:
-	if current_state != GameState.PLAYING or shop_panel.visible:
+func _process(delta: float) -> void:
+	_check_lives_recharge()
+
+	# Atualiza floating texts
+	var ft_i = floating_scores.size() - 1
+	while ft_i >= 0:
+		var ft = floating_scores[ft_i]
+		ft.pos.y -= 55.0 * delta
+		ft.life += delta
+		if ft.life >= ft.max_life:
+			floating_scores.remove_at(ft_i)
+		ft_i -= 1
+
+	if current_state != GameState.PLAYING:
+		queue_redraw()
 		return
 
-	_process_modifiers(delta)
-	_process_screen_shake(delta)
-	_process_paddle(delta)
-	_process_turret(delta)
-	_process_helix(delta)
-	_process_bumpers(delta)
-	_process_balls(delta)
-	_process_particles(delta)
-	_process_special_orbs(delta)
-	_process_coins_animation(delta)
-	_process_dynamic_spawning(delta)
+	# Tremor de tela
+	if screen_shake > 0.0:
+		screen_shake = maxf(screen_shake - delta * 18.0, 0.0)
 
-	_update_objective_and_progress()
-
-	var cfg = _get_current_config()
-	if score >= cfg["target_score"]:
-		_complete_current_stage()
-
-	queue_redraw()
-
-func _process_modifiers(delta: float) -> void:
+	# Escudo protetor de reviver
 	if revive_shield_timer > 0.0:
-		revive_shield_timer -= delta
+		revive_shield_timer = maxf(revive_shield_timer - delta, 0.0)
 
+	# Duração dos Buffs/Debuffs da raquete
 	if paddle_buff_timer > 0.0:
 		paddle_buff_timer -= delta
 		if paddle_buff_timer <= 0.0:
-			if paddle_buff_type == "expand" or paddle_buff_type == "poison":
-				paddle_arc_current = paddle_base_arc_degrees
 			paddle_buff_type = "normal"
+			paddle_arc_current = paddle_base_arc_degrees
 
 	if paddle_stun_timer > 0.0:
-		paddle_stun_timer -= delta
+		paddle_stun_timer = maxf(paddle_stun_timer - delta, 0.0)
 
-func _process_turret(delta: float) -> void:
-	if turret == null:
-		return
+	# Atualização do Boss da Torre
+	if turret != null:
+		turret.angle += delta * 1.6
+		turret.shoot_timer += delta
+		if turret.shoot_timer >= turret.shoot_interval:
+			turret.shoot_timer = 0.0
+			_shoot_turret_bullet()
 
-	turret.angle += 0.8 * delta
-	turret.shoot_timer += delta
+	# Atualização dos projéteis da torre
+	_process_turret_bullets(delta)
 
-	if turret.shoot_timer >= turret.shoot_interval:
-		turret.shoot_timer = 0.0
-		var b = TurretBullet.new()
-		b.pos = turret.pos
-		b.vel = Vector2.RIGHT.rotated(turret.angle) * 190.0
-		turret_bullets.append(b)
-		_play_sfx(sfx_turret_shot)
-		_trigger_firework(turret.pos, Color(1.0, 0.2, 0.2), 8)
+	# Hélice rotativa
+	if helix != null:
+		helix.angle += helix.rot_speed * delta
 
-	for i in range(turret_bullets.size() - 1, -1, -1):
-		var tb = turret_bullets[i]
-		tb.pos += tb.vel * delta
+	# Movimento suave da raquete
+	var diff = wrapf(target_paddle_angle - paddle_angle, -PI, PI)
+	paddle_angle += diff * clampf(paddle_smoothness * delta, 0.0, 1.0)
+	paddle_angle = wrapf(paddle_angle, -PI, PI)
 
-		var dist_out = tb.pos.distance_to(arena_center)
-		if dist_out >= arena_radius - 14.0:
-			var dir_ang = (tb.pos - arena_center).angle()
-			var diff = abs(angle_difference(paddle_angle, dir_ang))
-			var half_arc = deg_to_rad(paddle_arc_current / 2.0)
+	# Atualização das partículas
+	var p_idx = particles.size() - 1
+	while p_idx >= 0:
+		var pt = particles[p_idx]
+		pt.pos += pt.vel * delta
+		pt.life -= delta
+		if pt.life <= 0.0:
+			particles.remove_at(p_idx)
+		p_idx -= 1
 
-			if diff <= half_arc:
-				paddle_arc_current = maxf(paddle_arc_current - 14.0, 14.0)
-				paddle_buff_type = "hit"
-				paddle_buff_timer = 0.4
-				paddle_stun_timer = 0.3
-				_add_shake(5.5)
-				_trigger_firework(tb.pos, Color(1.0, 0.2, 0.2), 24)
-				_play_sfx(sfx_poison)
-				turret_bullets.remove_at(i)
-				continue
-
-		if dist_out >= arena_radius + 20.0:
-			turret_bullets.remove_at(i)
-
-func _process_dynamic_spawning(delta: float) -> void:
+	# Spawner orgânico contínuo
 	dynamic_spawn_timer += delta
 	if dynamic_spawn_timer >= 3.2:
 		dynamic_spawn_timer = 0.0
-		var palette = _get_current_palette()
-		var blk_size = Vector2(28, 28)
+		_spawn_dynamic_content()
 
-		if square_blocks.size() < 7:
-			var rand_dist = randf_range(40.0, arena_radius * 0.52)
-			var rand_pos = arena_center + Vector2.RIGHT.rotated(randf() * TAU) * rand_dist - blk_size / 2.0
-			_create_square_block(rand_pos, blk_size, palette["accent"])
-			_trigger_firework(rand_pos + blk_size / 2.0, palette["accent"].lightened(0.3), 10)
-
-		if coins_items.size() < 3:
-			var coin_dist = randf_range(50.0, arena_radius * 0.65)
-			_spawn_coin(arena_center + Vector2.RIGHT.rotated(randf() * TAU) * coin_dist)
-
-		if active_special_orbs.size() < 2:
-			var types = ["expand", "poison", "fireball"]
-			var chosen = types[randi() % types.size()]
-			var sp_dist = randf_range(50.0, 110.0)
-			_spawn_special_orb(arena_center + Vector2.RIGHT.rotated(randf() * TAU) * sp_dist, chosen)
-
-	for blk in square_blocks:
-		if blk.spawn_anim < 1.0:
-			blk.spawn_anim = clampf(blk.spawn_anim + delta * 4.0, 0.0, 1.0)
-
-func _update_objective_and_progress() -> void:
-	var cfg = _get_current_config()
-	var start_s = float(cfg["start_score"])
-	var target_s = float(cfg["target_score"])
-	var span = maxf(target_s - start_s, 1.0)
-	var current_prog = clampf(float(score) - start_s, 0.0, span)
-
-	stage_progress_bar.max_value = span
-	stage_progress_bar.value = current_prog
-
-	var buff_indicator = ""
-	if paddle_buff_type == "expand":
-		buff_indicator = " [RAQUETE GIGANTE! 🟢]"
-	elif paddle_buff_type == "poison":
-		buff_indicator = " [VENENO MINI! 🟣]"
-	elif paddle_arc_current <= 16.0:
-		buff_indicator = " [RAQUETE MÍNIMA! 💀]"
-	elif paddle_arc_current <= 28.0:
-		buff_indicator = " [RAQUETE CRÍTICA! ⚠️]"
-	elif paddle_stun_timer > 0.0:
-		buff_indicator = " [ATORDOADO! ⚡]"
-
-	objective_label.text = "Meta: %d PONTOS (%d/%d)%s" % [target_s, score, target_s, buff_indicator]
-
-func _process_coins_animation(delta: float) -> void:
-	for c in coins_items:
-		c.pulse += delta * 4.0
-
-func _process_screen_shake(delta: float) -> void:
-	if screen_shake > 0.0:
-		screen_shake = lerpf(screen_shake, 0.0, 12.0 * delta)
-		if screen_shake < 0.2:
-			screen_shake = 0.0
-
-func _process_paddle(delta: float) -> void:
-	var key_axis = Input.get_axis("ui_left", "ui_right")
-	if key_axis != 0.0:
-		var speed_mod = 0.4 if paddle_stun_timer > 0.0 else 1.0
-		target_paddle_angle += key_axis * keyboard_rot_speed * speed_mod * delta
-		target_paddle_angle = wrapf(target_paddle_angle, -PI, PI)
-
-	var diff = angle_difference(paddle_angle, target_paddle_angle)
-	var lerp_spd = paddle_smoothness * (0.3 if paddle_stun_timer > 0.0 else 1.0)
-	paddle_angle += diff * clampf(lerp_spd * delta, 0.0, 1.0)
-	paddle_angle = wrapf(paddle_angle, -PI, PI)
-
-func _process_helix(delta: float) -> void:
-	if helix != null:
-		helix.angle += helix.rot_speed * delta
-		helix.angle = wrapf(helix.angle, -PI, PI)
-
-func _process_bumpers(delta: float) -> void:
-	for bmp in bumpers:
-		if bmp.impulse_scale > 1.0:
-			bmp.impulse_scale = lerpf(bmp.impulse_scale, 1.0, 8.0 * delta)
-			bmp.radius = bmp.base_radius * bmp.impulse_scale
-
-func _process_balls(delta: float) -> void:
-	var boundary_limit = arena_radius - ball_radius
-	var palette = _get_current_palette()
-
-	for i in range(balls.size() - 1, -1, -1):
-		var b = balls[i]
+	# Físicas das bolinhas
+	var ball_idx = balls.size() - 1
+	while ball_idx >= 0:
+		var b = balls[ball_idx]
+		b.pos += b.vel * delta
 
 		if b.is_fireball:
 			b.fireball_timer -= delta
 			if b.fireball_timer <= 0.0:
 				b.is_fireball = false
-				b.color = Color.WHITE
 
-		b.trail.push_front(b.pos)
+		b.trail.insert(0, b.pos)
 		if b.trail.size() > max_trail_points:
 			b.trail.pop_back()
 
-		b.pos += b.vel * delta
-		var dist_center = b.pos.distance_to(arena_center)
+		_check_ball_paddle_collision(b)
+		_check_ball_coins_collision(b)
+		_check_ball_blocks_collision(b)
+		_check_ball_bumpers_collision(b)
+		_check_ball_helix_collision(b)
+		_check_ball_special_orbs_collision(b)
+		_check_ball_turret_collision(b)
 
-		if dist_center >= boundary_limit:
-			var outward_normal = (b.pos - arena_center).normalized()
-			var impact_angle = outward_normal.angle()
-			var ang_diff = abs(angle_difference(paddle_angle, impact_angle))
+		# Morte da bolinha (fora dos limites)
+		var dist = b.pos.distance_to(arena_center)
+		if dist > arena_radius + ball_radius + 40.0:
+			balls.remove_at(ball_idx)
+			_trigger_firework(b.pos, Color.RED, 18)
+			_add_shake(6.0)
+
+		ball_idx -= 1
+
+	# Game Over se acabarem todas as bolinhas
+	if balls.is_empty():
+		_trigger_game_over()
+
+	queue_redraw()
+
+func _shoot_turret_bullet() -> void:
+	if turret == null:
+		return
+	var b = TurretBullet.new()
+	b.pos = turret.pos
+	var shoot_dir = Vector2.RIGHT.rotated(turret.angle)
+	b.vel = shoot_dir * 185.0
+	turret_bullets.append(b)
+	_play_sfx(sfx_turret_shot)
+
+func _process_turret_bullets(delta: float) -> void:
+	var tb_idx = turret_bullets.size() - 1
+	while tb_idx >= 0:
+		var tb = turret_bullets[tb_idx]
+		tb.pos += tb.vel * delta
+
+		var dist = tb.pos.distance_to(arena_center)
+		# Colisão com o escudo da raquete
+		if absf(dist - arena_radius) <= tb.radius + paddle_thickness / 2.0:
+			var ang_to_bullet = (tb.pos - arena_center).angle()
+			var ang_diff = absf(wrapf(ang_to_bullet - paddle_angle, -PI, PI))
 			var half_arc = deg_to_rad(paddle_arc_current / 2.0)
 
-			# 1. Acertou a raquete!
 			if ang_diff <= half_arc:
-				var inward_normal = -outward_normal
-				b.vel = b.vel.bounce(inward_normal)
+				# Tiro acertou a raquete do jogador!
+				turret_bullets.remove_at(tb_idx)
+				_add_shake(6.0)
+				_play_sfx(sfx_brick)
+				_trigger_firework(tb.pos, Color(1.0, 0.2, 0.2), 20)
 
-				var contact_ratio = angle_difference(paddle_angle, impact_angle) / half_arc
-				var tangent = Vector2(-outward_normal.y, outward_normal.x)
-				b.vel = (b.vel + tangent * contact_ratio * (b.speed * 0.35)).normalized() * b.speed
+				# Encolhimento progressivo sem Game Over direto
+				paddle_arc_current = maxf(paddle_arc_current - 14.0, 14.0)
+				paddle_stun_timer = 0.4
+				_spawn_floating_text(tb.pos, "-LARGURA!", Color(1.0, 0.3, 0.3), 20)
+				tb_idx -= 1
+				continue
 
-				if b.vel.dot(outward_normal) > 0.0:
-					b.vel = b.vel.bounce(inward_normal)
+		if dist > arena_radius + 60.0:
+			turret_bullets.remove_at(tb_idx)
+
+		tb_idx -= 1
+
+func _spawn_dynamic_content() -> void:
+	var cfg = _get_current_config()
+	var palette = cfg["palette"]
+	var blk_size = Vector2(28, 28)
+
+	if square_blocks.size() < 4:
+		var ang = randf() * TAU
+		var dist = randf_range(50.0, arena_radius * 0.55)
+		var pos = arena_center + Vector2.RIGHT.rotated(ang) * dist - blk_size / 2.0
+		_create_square_block(pos, blk_size, palette["accent"])
+
+	if coins_items.size() < 3:
+		var c_ang = randf() * TAU
+		var c_dist = randf_range(40.0, arena_radius * 0.65)
+		_spawn_coin(arena_center + Vector2.RIGHT.rotated(c_ang) * c_dist)
+
+# ------------------------------------------------------------------------------
+# 14. COLISÕES E PONTUAÇÃO
+# ------------------------------------------------------------------------------
+func _check_ball_paddle_collision(b: Ball) -> void:
+	var dist = b.pos.distance_to(arena_center)
+	var boundary_limit = arena_radius - ball_radius
+
+	# Escudo de reviver ativo
+	if revive_shield_timer > 0.0 and dist >= boundary_limit - 4.0:
+		var normal = (arena_center - b.pos).normalized()
+		b.vel = b.vel.bounce(normal)
+		b.pos = arena_center - normal * (boundary_limit - 6.0)
+		_play_sfx(sfx_bounce)
+		_trigger_firework(b.pos, Color(0.2, 1.0, 0.6), 14)
+		_spawn_floating_text(b.pos, "ESCUDO! 🛡️", Color(0.2, 1.0, 0.6), 22)
+		return
+
+	if dist >= boundary_limit - 6.0 and dist <= boundary_limit + 14.0:
+		var ang_to_ball = (b.pos - arena_center).angle()
+		var ang_diff = absf(wrapf(ang_to_ball - paddle_angle, -PI, PI))
+		var half_arc = deg_to_rad(paddle_arc_current / 2.0)
+
+		if ang_diff <= half_arc:
+			var outward_normal = (b.pos - arena_center).normalized()
+			if b.vel.dot(outward_normal) > 0.0:
+				var paddle_tangent = Vector2(-outward_normal.y, outward_normal.x)
+				var hit_factor = (ang_to_ball - paddle_angle) / half_arc
+				var bounce_dir = -outward_normal + paddle_tangent * (hit_factor * 0.45)
+				b.vel = bounce_dir.normalized() * b.speed
 
 				b.speed *= ball_speed_increment
 				b.vel = b.vel.normalized() * b.speed
 				b.pos = arena_center + outward_normal * (boundary_limit - 1.0)
 
 				score += 1
+				_spawn_floating_text(b.pos, "+1", Color(0.2, 0.95, 1.0), 18)
 				_update_hud()
-				_add_shake(2.5)
+				_add_shake(2.0)
 				_play_sfx(sfx_bounce)
-				_trigger_firework(b.pos, palette["paddle"], 12)
+				_trigger_firework(b.pos, _get_current_config()["palette"]["paddle"], 10)
 
-			# 2. ESCUDO DE REVIVER ATIVO: Rebate de volta automaticamente!
-			elif revive_shield_timer > 0.0:
-				var inward_normal = -outward_normal
-				b.vel = b.vel.bounce(inward_normal)
-				b.pos = arena_center + outward_normal * (boundary_limit - 1.0)
-				_add_shake(4.0)
-				_play_sfx(sfx_bounce)
-				_trigger_firework(b.pos, Color(0.2, 1.0, 0.5), 18)
-
-			else:
-				# Perdeu a bolinha
-				_trigger_firework(b.pos, Color(1.0, 0.2, 0.3), 16)
-				balls.remove_at(i)
-				continue
-
-		_check_ball_coins_pickup(b)
-		_check_ball_square_blocks_collision(b)
-		_check_ball_bumpers_collision(b)
-		_check_ball_helix_collision(b)
-		_check_ball_turret_collision(b)
-
-	if balls.is_empty():
-		_trigger_game_over()
-
-func _check_ball_coins_pickup(b: Ball) -> void:
+func _check_ball_coins_collision(b: Ball) -> void:
 	for i in range(coins_items.size() - 1, -1, -1):
 		var coin = coins_items[i]
 		if b.pos.distance_to(coin.pos) <= ball_radius + coin.radius:
@@ -910,24 +1196,30 @@ func _check_ball_coins_pickup(b: Ball) -> void:
 			run_coins_collected += 1
 			total_coins_bank += 1
 			score += 15
+			_spawn_floating_text(coin.pos, "+15 🪙", Color(1.0, 0.85, 0.2), 24)
 			_play_sfx(sfx_coin)
 			_trigger_firework(coin.pos, Color(1.0, 0.85, 0.15), 18)
 			coins_items.remove_at(i)
 			_update_hud()
+			_check_stage_goal()
 
-func _check_ball_square_blocks_collision(b: Ball) -> void:
+func _check_ball_blocks_collision(b: Ball) -> void:
 	for i in range(square_blocks.size() - 1, -1, -1):
 		var blk = square_blocks[i]
-		var blk_center = blk.rect.get_center()
+		var blk_center = blk.rect.position + blk.rect.size / 2.0
 		var half_sz = blk.rect.size / 2.0
+
 		var diff = b.pos - blk_center
+		var clamped_diff = Vector2(
+			clampf(diff.x, -half_sz.x, half_sz.x),
+			clampf(diff.y, -half_sz.y, half_sz.y)
+		)
+		var closest = blk_center + clamped_diff
 
-		var overlap_x = (half_sz.x + ball_radius) - absf(diff.x)
-		var overlap_y = (half_sz.y + ball_radius) - absf(diff.y)
-
-		if overlap_x > 0.0 and overlap_y > 0.0:
+		if b.pos.distance_to(closest) <= ball_radius:
 			if not b.is_fireball:
-				if overlap_x < overlap_y:
+				var overlap = ball_radius - b.pos.distance_to(closest)
+				if absf(diff.x) > absf(diff.y):
 					b.vel.x = -b.vel.x
 					b.pos.x = blk_center.x + (half_sz.x + ball_radius + 1.0) * signf(diff.x)
 				else:
@@ -936,26 +1228,26 @@ func _check_ball_square_blocks_collision(b: Ball) -> void:
 
 			square_blocks.remove_at(i)
 			score += 25
+			_spawn_floating_text(blk_center, "+25", blk.color, 24)
 			_play_sfx(sfx_brick)
-			_add_shake(3.5)
+			_add_shake(3.0)
 			_trigger_firework(blk_center, blk.color, 16)
 			_update_hud()
+			_check_stage_goal()
 			break
 
 func _check_ball_turret_collision(b: Ball) -> void:
 	if turret == null:
 		return
-
 	if b.pos.distance_to(turret.pos) <= ball_radius + turret.radius:
-		var normal = (b.pos - turret.pos).normalized()
-		b.vel = b.vel.bounce(normal)
-		b.pos = turret.pos + normal * (turret.radius + ball_radius + 2.0)
-
 		var dmg = 5 if b.is_fireball else 1
 		turret.hp -= dmg
-		_add_shake(6.0)
+		b.vel = (b.pos - turret.pos).normalized() * b.speed
 		_play_sfx(sfx_brick)
 		_trigger_firework(turret.pos, Color(1.0, 0.4, 0.1), 22)
+		_spawn_floating_text(turret.pos, "+50 💥", Color(1.0, 0.4, 0.1), 26)
+		score += 50
+		_update_hud()
 
 		if turret.hp <= 0:
 			_trigger_firework(turret.pos, Color(1.0, 0.8, 0.2), 45)
@@ -964,162 +1256,199 @@ func _check_ball_turret_collision(b: Ball) -> void:
 			coins += 10
 			run_coins_collected += 10
 			total_coins_bank += 10
+			_spawn_floating_text(turret.pos, "TORRE DESTRUÍDA! +150 🏆", Color(1.0, 0.85, 0.2), 28)
 			turret = null
 			_update_hud()
+			_check_stage_goal()
 
 func _check_ball_bumpers_collision(b: Ball) -> void:
 	for bmp in bumpers:
-		var dist = b.pos.distance_to(bmp.pos)
-		if dist <= ball_radius + bmp.radius:
+		if b.pos.distance_to(bmp.pos) <= ball_radius + bmp.radius:
 			var normal = (b.pos - bmp.pos).normalized()
-			b.vel = b.vel.bounce(normal)
-			b.pos = bmp.pos + normal * (bmp.radius + ball_radius + 2.0)
+			b.vel = normal * (b.speed * 1.15)
+			b.pos = bmp.pos + normal * (bmp.radius + ball_radius + 1.0)
 
-			bmp.impulse_scale = 1.25
-			_add_shake(4.0)
+			_add_shake(3.5)
 			_play_sfx(sfx_bounce)
-			_trigger_firework(bmp.pos + normal * bmp.radius, bmp.color, 16)
+			_trigger_firework(bmp.pos + normal * bmp.radius, bmp.color, 14)
 			score += 5
+			_spawn_floating_text(bmp.pos, "+5", bmp.color, 20)
 			_update_hud()
+			_check_stage_goal()
 
 func _check_ball_helix_collision(b: Ball) -> void:
 	if helix == null:
 		return
+	var h_dir = Vector2.RIGHT.rotated(helix.angle)
+	var p_start = helix.center - h_dir * (helix.length / 2.0)
+	var p_end = helix.center + h_dir * (helix.length / 2.0)
 
-	var rel_pos = b.pos - helix.center
-	var local_pos = rel_pos.rotated(-helix.angle)
-	var half_len = helix.length / 2.0
-	var half_thk = helix.thickness / 2.0
+	var seg = p_end - p_start
+	var t = clampf((b.pos - p_start).dot(seg) / seg.length_squared(), 0.0, 1.0)
+	var closest = p_start + seg * t
 
-	var cl_x = clampf(local_pos.x, -half_len, half_len)
-	var cl_y = clampf(local_pos.y, -half_thk, half_thk)
-	var local_closest = Vector2(cl_x, cl_y)
-	var local_diff = local_pos - local_closest
-
-	if local_diff.length() <= ball_radius:
-		var local_normal = local_diff.normalized()
-		if local_normal.is_zero_approx():
-			local_normal = Vector2.UP
-
-		var world_normal = local_normal.rotated(helix.angle)
-		var surface_tangent = Vector2(-rel_pos.y, rel_pos.x) * helix.rot_speed
-
-		b.vel = b.vel.bounce(world_normal) + surface_tangent * 0.3
-		b.vel = b.vel.normalized() * b.speed
-		b.pos = helix.center + (local_closest + local_normal * (ball_radius + 2.0)).rotated(helix.angle)
-
-		_add_shake(4.5)
+	if b.pos.distance_to(closest) <= ball_radius + helix.thickness / 2.0:
+		var n = (b.pos - closest).normalized()
+		b.vel = n * b.speed
+		b.pos = closest + n * (ball_radius + helix.thickness / 2.0 + 1.0)
 		_play_sfx(sfx_bounce)
-		_trigger_firework(b.pos, helix.color, 16)
+		_add_shake(4.0)
+		score += 5
+		_spawn_floating_text(closest, "+5", helix.color, 20)
+		_update_hud()
 
-func _process_special_orbs(delta: float) -> void:
+func _check_ball_special_orbs_collision(b: Ball) -> void:
 	for i in range(active_special_orbs.size() - 1, -1, -1):
 		var orb = active_special_orbs[i]
-		orb.pulse_time += delta
+		if b.pos.distance_to(orb.pos) <= ball_radius + orb.radius:
+			_apply_special_power(orb.type, orb.pos)
+			active_special_orbs.remove_at(i)
+			break
 
-		for b in balls:
-			if b.pos.distance_to(orb.pos) <= ball_radius + orb.radius:
-				_apply_special_orb_effect(orb.type, b, orb.pos)
-				active_special_orbs.remove_at(i)
-				break
-
-func _apply_special_orb_effect(type: String, b: Ball, hit_pos: Vector2) -> void:
+func _apply_special_power(type: String, hit_pos: Vector2) -> void:
 	match type:
 		"multiball":
-			_spawn_ball(hit_pos, b.vel.angle() + deg_to_rad(30.0), b.speed)
-			_spawn_ball(hit_pos, b.vel.angle() - deg_to_rad(30.0), b.speed)
 			_play_sfx(sfx_powerup)
+			_spawn_floating_text(hit_pos, "MULTIBALL! 🟡", Color(1.0, 0.85, 0.2), 26)
+			if not balls.is_empty():
+				var ref = balls[0]
+				for ang_off in [-0.4, 0.4]:
+					_spawn_ball(ref.pos, ref.vel.angle() + ang_off, ref.speed)
 			_trigger_firework(hit_pos, Color(1.0, 0.85, 0.2), 30)
 
 		"expand":
-			paddle_buff_type = "expand"
-			paddle_arc_current = 76.0
-			paddle_buff_timer = 10.0
 			_play_sfx(sfx_powerup)
-			_trigger_firework(hit_pos, Color(0.2, 1.0, 0.4), 28)
+			paddle_arc_current = 76.0
+			paddle_buff_timer = 9.0
+			paddle_buff_type = "expand"
+			_spawn_floating_text(hit_pos, "RAQUETE GIGANTE! 🟢", Color(0.2, 1.0, 0.4), 26)
+			_trigger_firework(hit_pos, Color(0.2, 1.0, 0.4), 30)
 
 		"poison":
-			paddle_buff_type = "poison"
-			paddle_arc_current = 36.0
-			paddle_buff_timer = 8.0
 			_play_sfx(sfx_poison)
-			_trigger_firework(hit_pos, Color(0.8, 0.2, 0.9), 25)
+			paddle_arc_current = 36.0
+			paddle_buff_timer = 7.0
+			paddle_buff_type = "poison"
+			_spawn_floating_text(hit_pos, "ENCOLHEU! 🟣", Color(0.85, 0.2, 0.95), 24)
+			_trigger_firework(hit_pos, Color(0.85, 0.2, 0.95), 30)
 
 		"fireball":
-			b.is_fireball = true
-			b.fireball_timer = 10.0
-			b.color = Color(1.0, 0.4, 0.1)
 			_play_sfx(sfx_fireball)
+			_spawn_floating_text(hit_pos, "BOLA DE FOGO! 🔥", Color(1.0, 0.4, 0.1), 28)
+			for bl in balls:
+				bl.is_fireball = true
+				bl.fireball_timer = 7.5
 			_trigger_firework(hit_pos, Color(1.0, 0.4, 0.1), 35)
 
 	coins += 2
 	run_coins_collected += 2
 	total_coins_bank += 2
 	score += 30
-	_add_shake(5.0)
+	_add_shake(4.0)
 	_update_hud()
-
-func _complete_current_stage() -> void:
-	score += 100
-	coins += 5
-	run_coins_collected += 5
-	total_coins_bank += 5
-	_play_sfx(sfx_powerup)
-	_trigger_firework(arena_center, Color(0.2, 1.0, 0.6), 45)
-
-	if current_stage_idx == 4:
-		current_state = GameState.CAMPAIGN_CLEAR
-		if score > high_score:
-			high_score = score
-		_save_profile()
-		total_score_label.text = "Pontuação: %d  |  Moedas: %d" % [score, coins]
-		victory_panel.visible = true
-		current_stage_idx += 1
-	else:
-		current_stage_idx += 1
-		_load_stage(current_stage_idx)
+	_check_stage_goal()
 
 # ------------------------------------------------------------------------------
-# 11. SISTEMA DE PARTÍCULAS
+# 15. PROGRESSÃO DE FASE & VITÓRIA
+# ------------------------------------------------------------------------------
+func _check_stage_goal() -> void:
+	if current_stage_idx >= STAGE_CONFIGS.size():
+		return # Modo infinito não tem meta fixa
+
+	var target = STAGE_CONFIGS[current_stage_idx]["target_score"]
+	if score >= target:
+		_complete_current_stage()
+
+func _complete_current_stage() -> void:
+	current_state = GameState.STAGE_CLEAR
+
+	score += 100
+	coins += 10
+	run_coins_collected += 10
+	total_coins_bank += 10
+	_play_sfx(sfx_powerup)
+	_trigger_firework(arena_center, Color(0.2, 1.0, 0.6), 50)
+
+	var target = STAGE_CONFIGS[current_stage_idx]["target_score"]
+	var stage_key = str(current_stage_idx)
+
+	# Atualiza recorde da fase
+	var prev_record = stage_high_scores.get(stage_key, 0)
+	if score > prev_record:
+		stage_high_scores[stage_key] = score
+
+	# Calcula estrelas
+	var stars = 1
+	if score >= int(target * 1.45):
+		stars = 3
+	elif score >= int(target * 1.20):
+		stars = 2
+	stage_stars[stage_key] = maxi(stage_stars.get(stage_key, 0), stars)
+
+	# Desbloqueia próxima fase
+	if current_stage_idx == unlocked_stage and unlocked_stage < STAGE_CONFIGS.size() - 1:
+		unlocked_stage += 1
+
+	if score > high_score:
+		high_score = score
+	_save_profile()
+
+	# Configura o painel comemorativo
+	var stars_text = "⭐⭐⭐" if stars == 3 else ("⭐⭐☆" if stars == 2 else "⭐☆☆")
+	stage_stars_label.text = stars_text
+	stage_clear_score_label.text = "Pontuação: %d PONTOS" % score
+	stage_clear_bonus_label.text = "Bônus Conquistado: +100 Pontos | +10 Moedas"
+
+	if current_stage_idx >= STAGE_CONFIGS.size() - 1:
+		stage_clear_unlock_label.text = "🏆 MODO INFINITO DESBLOQUEADO!"
+		next_stage_button.text = "MODO INFINITO ♾️"
+	else:
+		stage_clear_unlock_label.text = "🔓 Fase %d Desbloqueada no Mapa!" % (current_stage_idx + 2)
+		next_stage_button.text = "PRÓXIMA FASE ➡️"
+
+	stage_clear_panel.visible = true
+	_update_dimmer()
+
+func _on_next_stage_pressed() -> void:
+	stage_clear_panel.visible = false
+	_update_dimmer()
+	if current_stage_idx < STAGE_CONFIGS.size() - 1:
+		_start_stage(current_stage_idx + 1)
+	else:
+		start_infinite_mode()
+
+# ------------------------------------------------------------------------------
+# 16. SISTEMA DE PARTÍCULAS E SCREEN SHAKE
 # ------------------------------------------------------------------------------
 func _trigger_firework(origin: Vector2, col: Color, count: int) -> void:
 	for i in range(count):
 		var p = Particle.new()
 		p.pos = origin
-		var ang = randf_range(0.0, TAU)
-		var spd = randf_range(80.0, 240.0)
+		var ang = randf() * TAU
+		var spd = randf_range(60.0, 240.0)
 		p.vel = Vector2.RIGHT.rotated(ang) * spd
-		p.color = col.lightened(randf_range(0.0, 0.4))
-		p.max_life = randf_range(0.3, 0.55)
-		p.life = p.max_life
-		p.size = randf_range(2.5, 4.0)
+		p.color = col
+		p.life = randf_range(0.25, 0.65)
+		p.max_life = p.life
+		p.size = randf_range(3.0, 6.0)
 		particles.append(p)
-
-func _process_particles(delta: float) -> void:
-	for i in range(particles.size() - 1, -1, -1):
-		var p = particles[i]
-		p.life -= delta
-		if p.life <= 0.0:
-			particles.remove_at(i)
-			continue
-		p.pos += p.vel * delta
-		p.vel *= (1.0 - 2.5 * delta)
 
 func _add_shake(amount: float) -> void:
 	screen_shake = clampf(screen_shake + amount, 0.0, max_screen_shake)
 
 # ------------------------------------------------------------------------------
-# 12. RENDERIZAÇÃO GRÁFICA VIA CÓDIGO (_draw)
+# 17. RENDERIZAÇÃO GRÁFICA VIA CÓDIGO (_draw)
 # ------------------------------------------------------------------------------
 func _draw() -> void:
 	var shake_offset = Vector2.ZERO
 	if screen_shake > 0.0:
-		shake_offset = Vector2(randf_range(-1, 1), randf_range(-1, 1)) * screen_shake
+		shake_offset = Vector2(randf_range(-screen_shake, screen_shake), randf_range(-screen_shake, screen_shake))
 
 	var center = arena_center + shake_offset
-	var palette = _get_current_palette()
+	var cfg = _get_current_config()
+	var palette = cfg["palette"]
 
-	# 1. Fundo da Arena e Borda
+	# 1. Arena Circular Base
 	draw_circle(center, arena_radius, Color(0.06, 0.07, 0.11, 0.9))
 	draw_arc(center, arena_radius, 0.0, TAU, 84, palette["arena"], arena_line_width, true)
 
@@ -1170,7 +1499,7 @@ func _draw() -> void:
 	for c in coins_items:
 		var c_pos = c.pos + shake_offset
 		var scale_p = 1.0 + 0.12 * sin(c.pulse)
-		draw_circle(c_pos, c.radius * scale_p, Color(1.0, 0.85, 0.2))
+		draw_circle(c_pos, c.radius * scale_p, Color(0.9, 0.75, 0.1))
 		draw_circle(c_pos, c.radius * 0.75 * scale_p, Color(1.0, 0.95, 0.4))
 		draw_line(c_pos + Vector2(0, -5), c_pos + Vector2(0, 5), Color(0.65, 0.45, 0.0), 2.0)
 
@@ -1178,8 +1507,7 @@ func _draw() -> void:
 	for blk in square_blocks:
 		var blk_scale = blk.spawn_anim
 		var sz = blk.rect.size * blk_scale
-		var top_left = blk.rect.get_center() - sz / 2.0 + shake_offset
-		var r_off = Rect2(top_left, sz)
+		var r_off = Rect2(blk.rect.position + shake_offset + (blk.rect.size - sz) / 2.0, sz)
 		draw_rect(r_off, blk.color)
 		draw_rect(r_off, Color.WHITE.lerp(blk.color, 0.4), false, 2.0)
 
@@ -1198,7 +1526,7 @@ func _draw() -> void:
 		draw_circle(o_pos, orb.radius * 0.7 * pulse, base_col)
 		draw_circle(o_pos, 4.0, Color.WHITE)
 
-	# 10. Raquete (com estados visuais de integridade)
+	# 10. Raquete (Estados visuais de integridade)
 	var half_arc = deg_to_rad(paddle_arc_current / 2.0)
 	var start_ang = paddle_angle - half_arc
 	var end_ang = paddle_angle + half_arc
@@ -1218,7 +1546,7 @@ func _draw() -> void:
 	draw_circle(center + Vector2.RIGHT.rotated(start_ang) * arena_radius, cap_radius, p_color)
 	draw_circle(center + Vector2.RIGHT.rotated(end_ang) * arena_radius, cap_radius, p_color)
 
-	# 11. Rastro das Bolinhas (Customizado pela Skin Equipada!)
+	# 11. Rastro das Bolinhas (Customizado pela Skin)
 	for b in balls:
 		var t_size = b.trail.size()
 		for t_idx in range(t_size):
@@ -1248,24 +1576,74 @@ func _draw() -> void:
 		col.a = alpha
 		draw_circle(pt.pos + shake_offset, pt.size * alpha, col)
 
+	# 13. Textos Flutuantes de Pontuação (Score Popups)
+	var default_font = ThemeDB.fallback_font
+	for ft in floating_scores:
+		var alpha = clampf(1.0 - (ft.life / ft.max_life), 0.0, 1.0)
+		var ft_col = ft.color
+		ft_col.a = alpha
+		draw_string(default_font, ft.pos + shake_offset, ft.text, HORIZONTAL_ALIGNMENT_CENTER, -1, ft.font_size, ft_col)
+
 # ------------------------------------------------------------------------------
-# 13. HUD E GAME OVER
+# 18. HUD E GAME OVER
 # ------------------------------------------------------------------------------
 func _update_hud() -> void:
-	score_label.text = "PONTOS: %d" % score
-	coins_label.text = "🪙 %d" % coins
+	lives_label.text = _get_lives_text()
+	coins_label.text = "🪙 %d" % (total_coins_bank + coins)
+	big_score_label.text = str(score)
+	_update_objective_and_progress()
+
+func _update_objective_and_progress() -> void:
+	var cfg = _get_current_config()
+	var target = cfg["target_score"]
+	if current_stage_idx >= STAGE_CONFIGS.size():
+		objective_label.text = "MODO INFINITO | RECORDE: %d" % high_score
+		stage_progress_bar.max_value = 1000
+		stage_progress_bar.value = score % 1000
+	else:
+		objective_label.text = "META: %d PONTOS (%d/%d)" % [target, mini(score, target), target]
+		stage_progress_bar.max_value = target
+		stage_progress_bar.value = score
+
+func _get_current_config() -> Dictionary:
+	if current_stage_idx < STAGE_CONFIGS.size():
+		return STAGE_CONFIGS[current_stage_idx]
+	return {
+		"stage": 99,
+		"title": "MODO INFINITO ♾️",
+		"target_score": 99999,
+		"has_turret": true,
+		"palette": {
+			"name": "COSMIC PURPLE",
+			"paddle": Color(0.9, 0.3, 1.0),
+			"arena": Color(0.2, 0.1, 0.35, 0.7),
+			"accent": Color(1.0, 0.4, 0.8)
+		}
+	}
 
 func _trigger_game_over() -> void:
 	current_state = GameState.GAME_OVER
 	_play_sfx(sfx_gameover)
 
+	# Consome 1 vida se não tiver revivido
+	lives = maxi(0, lives - 1)
+	if lives < MAX_LIVES and last_life_timestamp <= 0:
+		last_life_timestamp = int(Time.get_unix_time_from_system())
+
+	var stage_key = str(current_stage_idx)
+	var prev_record = stage_high_scores.get(stage_key, 0)
+	if score > prev_record:
+		stage_high_scores[stage_key] = score
+
 	if score > high_score:
 		high_score = score
 	_save_profile()
 
-	final_score_label.text = "Pontuação: %d  |  Moedas: %d" % [score, coins]
-	high_score_label.text = "🏆 RECORDE PESSOAL: %d" % high_score
-	waves_cleared_label.text = "Fases Concluídas: %d" % current_stage_idx
+	# Configura labels gigantes do Game Over
+	big_final_score_label.text = str(score)
+	stage_record_label.text = "🏆 Recorde da Fase: %d pts" % stage_high_scores.get(stage_key, score)
+	coins_saved_label.text = "🪙 Moedas no Banco: %d (Total Seguro!)" % (total_coins_bank + coins)
+	lives_status_label.text = _get_lives_text()
 
 	revive_button.disabled = has_revived_this_run
 	if has_revived_this_run:
@@ -1280,5 +1658,17 @@ func _trigger_game_over() -> void:
 		double_coins_button.text = "🪙 2x MOEDAS (+%d)" % run_coins_collected
 		double_coins_button.disabled = (run_coins_collected == 0)
 
+	retry_stage_button.text = "🔄 TENTAR NOVAMENTE (-1 ❤️)" if lives > 0 else "SEM VIDAS ❤️ (Recarregar)"
+	retry_stage_button.disabled = (lives <= 0)
+
 	game_over_panel.visible = true
+	_update_dimmer()
 	queue_redraw()
+
+func _on_retry_pressed() -> void:
+	if lives <= 0:
+		_open_shop()
+		return
+	game_over_panel.visible = false
+	_update_dimmer()
+	_start_stage(current_stage_idx)
