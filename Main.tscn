@@ -10,33 +10,45 @@ script = ExtResource("1_main")
 [node name="TopBar" type="MarginContainer" parent="HUD"]
 anchors_preset = 10
 anchor_right = 1.0
-offset_left = 32.0
-offset_top = 50.0
-offset_right = -32.0
-offset_bottom = 110.0
+offset_left = 28.0
+offset_top = 40.0
+offset_right = -28.0
+offset_bottom = 140.0
 grow_horizontal = 2
 
-[node name="HBoxContainer" type="HBoxContainer" parent="HUD/TopBar"]
+[node name="VBoxContainer" type="VBoxContainer" parent="HUD/TopBar"]
 layout_mode = 2
-theme_override_constants/separation = 20
+theme_override_constants/separation = 6
 
-[node name="WaveLabel" type="Label" parent="HUD/TopBar/HBoxContainer"]
+[node name="HBoxContainer" type="HBoxContainer" parent="HUD/TopBar/VBoxContainer"]
 layout_mode = 2
+
+[node name="WaveLabel" type="Label" parent="HUD/TopBar/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.25, 0.9, 1, 1)
 theme_override_font_sizes/font_size = 22
-text = "FASE 1"
+text = "FASE 1: O DESPERTAR"
 
-[node name="ScoreLabel" type="Label" parent="HUD/TopBar/HBoxContainer"]
+[node name="ScoreLabel" type="Label" parent="HUD/TopBar/VBoxContainer/HBoxContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 22
 text = "PONTOS: 0"
 horizontal_alignment = 1
 
-[node name="CoinsLabel" type="Label" parent="HUD/TopBar/HBoxContainer"]
+[node name="CoinsLabel" type="Label" parent="HUD/TopBar/VBoxContainer/HBoxContainer"]
 layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
 theme_override_font_sizes/font_size = 22
 text = "🪙 0"
 horizontal_alignment = 2
+
+[node name="ObjectiveLabel" type="Label" parent="HUD/TopBar/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.9, 0.95, 0.9)
+theme_override_font_sizes/font_size = 16
+text = "Objetivo: Destrua os alvos (0/5)"
+horizontal_alignment = 1
 
 [node name="WaveBanner" type="Label" parent="HUD"]
 visible = false
@@ -45,15 +57,15 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -250.0
+offset_left = -300.0
 offset_top = -180.0
-offset_right = 250.0
-offset_bottom = -120.0
+offset_right = 300.0
+offset_bottom = -110.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_colors/font_color = Color(0.2, 0.95, 1, 1)
-theme_override_font_sizes/font_size = 36
-text = "FASE 1"
+theme_override_font_sizes/font_size = 34
+text = "FASE 1: O DESPERTAR"
 horizontal_alignment = 1
 
 [node name="GameOverPanel" type="PanelContainer" parent="HUD"]
@@ -63,23 +75,23 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -180.0
-offset_top = -120.0
-offset_right = 180.0
-offset_bottom = 120.0
+offset_left = -190.0
+offset_top = -130.0
+offset_right = 190.0
+offset_bottom = 130.0
 grow_horizontal = 2
 grow_vertical = 2
 
 [node name="MarginContainer" type="MarginContainer" parent="HUD/GameOverPanel"]
 layout_mode = 2
-theme_override_constants/margin_left = 30
-theme_override_constants/margin_top = 30
-theme_override_constants/margin_right = 30
-theme_override_constants/margin_bottom = 30
+theme_override_constants/margin_left = 28
+theme_override_constants/margin_top = 28
+theme_override_constants/margin_right = 28
+theme_override_constants/margin_bottom = 28
 
 [node name="VBoxContainer" type="VBoxContainer" parent="HUD/GameOverPanel/MarginContainer"]
 layout_mode = 2
-theme_override_constants/separation = 16
+theme_override_constants/separation = 14
 
 [node name="TitleLabel" type="Label" parent="HUD/GameOverPanel/MarginContainer/VBoxContainer"]
 layout_mode = 2
@@ -105,3 +117,53 @@ custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 theme_override_font_sizes/font_size = 18
 text = "JOGAR NOVAMENTE"
+
+[node name="VictoryPanel" type="PanelContainer" parent="HUD"]
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -220.0
+offset_top = -140.0
+offset_right = 220.0
+offset_bottom = 140.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="HUD/VictoryPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 28
+theme_override_constants/margin_top = 28
+theme_override_constants/margin_right = 28
+theme_override_constants/margin_bottom = 28
+
+[node name="VBoxContainer" type="VBoxContainer" parent="HUD/VictoryPanel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="TitleLabel" type="Label" parent="HUD/VictoryPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
+theme_override_font_sizes/font_size = 26
+text = "🏆 VITÓRIA NA CAMPANHA!"
+horizontal_alignment = 1
+
+[node name="DescLabel" type="Label" parent="HUD/VictoryPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "Você superou a Hélice e dominou a Órbita!"
+horizontal_alignment = 1
+
+[node name="TotalScoreLabel" type="Label" parent="HUD/VictoryPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Pontuação Total: 0"
+horizontal_alignment = 1
+
+[node name="InfiniteButton" type="Button" parent="HUD/VictoryPanel/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_override_font_sizes/font_size = 17
+text = "CONTINUAR NO MODO INFINITO"
