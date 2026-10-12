@@ -12,8 +12,9 @@ Desenvolvido com física vetorial matemática precisa e renderização gráfica 
 
 ## 📱 Downloads Oficiais (Android e Web)
 
-- 📲 **[Baixar APK Android (Instalação Direta)](https://github.com/marcos-toliveira/orbit-bounce/releases/latest/download/orbit-bounce.apk)**
-- 🌐 **[Baixar Pacote Web HTML5/WASM (Poki, CrazyGames & itch.io)](https://github.com/marcos-toliveira/orbit-bounce/releases/latest/download/orbit-bounce-web.zip)**
+- 📲 **[Baixar APK Android (v1.0.0-rc.3)](https://github.com/marcos-toliveira/orbit-bounce/releases/download/v1.0.0-rc.3/orbit-bounce.apk)**
+- 🌐 **[Baixar Pacote Web HTML5/WASM (v1.0.0-rc.3)](https://github.com/marcos-toliveira/orbit-bounce/releases/download/v1.0.0-rc.3/orbit-bounce-web.zip)**
+- 📦 **[Ver Histórico Completo de Releases](https://github.com/marcos-toliveira/orbit-bounce/releases)**
 
 ---
 
