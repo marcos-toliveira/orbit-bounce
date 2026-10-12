@@ -34,7 +34,7 @@ Desenvolvido com física vetorial matemática precisa e renderização gráfica 
 
 - **Orientação Mobile Portrait:** Resolução base calibrada para 720x1280.
 - **Controle Ultra-Fluido:** Raquete em formato de cápsula arredondada que desliza pela borda via touch drag na tela do celular ou mouse/teclado no PC.
-- **Passagem de Fases por Meta de Pontuação:** Cada fase possui uma meta clara (ex: 150, 350, 650, 1050 e 1600 pontos) com barra de progresso visual no topo do HUD.
+- **Passagem de Fases por Meta de Pontuação:** Cada fase possui uma meta clara (400, 700, 1000, 1400 e 1900 pontos) com barra de progresso visual no topo do HUD.
 - **Spawn Orgânico Contínuo:** Novos blocos quadradinhos e moedas surgem periodicamente no centro, garantindo ação ininterrupta e eliminando o problema do "último bloco".
 - **Moedas Coletáveis (*Pass-Through*):** A bolinha atravessa as moedas sem desvios bruscos, garantindo trajetórias suaves e previsíveis.
 - **Bloquinhos Quadradinhos Quebráveis:** Ricochete ortogonal limpo (eixos X/Y) estilo *Arkanoid*.
