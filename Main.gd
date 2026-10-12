@@ -1,8 +1,9 @@
 extends Node2D
 
 # ==============================================================================
-# ORBIT BOUNCE (PONG CIRCULAR) - CAMPANHA DE FASES 2.0
-# Sistema de 5 Fases por Objetivos + Mecânicas Únicas + Modo Infinito
+# ORBIT BOUNCE (PONG CIRCULAR) - EVOLUTION 2.1
+# Moedas Coletáveis (Pass-Through) + Blocos Quadradinhos com Ricochete Previsível
+# Calibragem de Dificuldade & Resposta Ágil no Mouse/Touch
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
@@ -11,25 +12,24 @@ extends Node2D
 @export_group("Arena e Estilo")
 @export var arena_radius: float = 300.0
 @export var arena_line_width: float = 5.0
-@export var bg_color: Color = Color(0.04, 0.05, 0.08, 1.0)
 
 @export_group("Jogador (Raquete Arredondada)")
-@export var paddle_arc_degrees: float = 46.0
+@export var paddle_arc_degrees: float = 54.0   # Aumentado para 54° (mais amigável)
 @export var paddle_thickness: float = 16.0
-@export var paddle_smoothness: float = 24.0
-@export var keyboard_rot_speed: float = 4.8
+@export var paddle_smoothness: float = 48.0    # Resposta quase instantânea no mouse
+@export var keyboard_rot_speed: float = 5.2
 
 @export_group("Bolinha & Rastro")
 @export var ball_radius: float = 11.0
-@export var ball_base_speed: float = 380.0
-@export var ball_speed_increment: float = 1.015
-@export var max_trail_points: int = 14
+@export var ball_base_speed: float = 310.0      # Calibrado: mais tempo de reação
+@export var ball_speed_increment: float = 1.012 # Aceleração suave por rebatida
+@export var max_trail_points: int = 12
 
 @export_group("Efeitos Visuais")
-@export var max_screen_shake: float = 9.0
+@export var max_screen_shake: float = 8.0
 
 # ------------------------------------------------------------------------------
-# 2. ESTRUTURAS DE DADOS DAS ENTIDADES
+# 2. ESTRUTURAS DE DADOS
 # ------------------------------------------------------------------------------
 class Ball:
 	var pos: Vector2
@@ -46,60 +46,59 @@ class Particle:
 	var max_life: float
 	var size: float
 
-class Block:
+class SquareBlock:
 	var rect: Rect2
-	var hp: int
-	var max_hp: int
+	var hp: int = 1
+	var max_hp: int = 1
 	var color: Color
 
-class StaticTarget:
+class CoinItem:
 	var pos: Vector2
-	var radius: float = 16.0
-	var color: Color = Color(1.0, 0.85, 0.2)
+	var radius: float = 14.0
 	var pulse: float = 0.0
 
 class Bumper:
 	var pos: Vector2
-	var radius: float = 26.0
-	var base_radius: float = 26.0
+	var radius: float = 24.0
+	var base_radius: float = 24.0
 	var impulse_scale: float = 1.0
 	var color: Color = Color(0.2, 0.9, 1.0)
 
 class HelixObstacle:
 	var center: Vector2
 	var angle: float = 0.0
-	var rot_speed: float = 1.25 # rad/s
-	var length: float = 160.0
-	var thickness: float = 18.0
+	var rot_speed: float = 0.95 # Mais suave para reação
+	var length: float = 150.0
+	var thickness: float = 16.0
 	var color: Color = Color(1.0, 0.28, 0.4)
 
 class PowerupOrb:
 	var pos: Vector2
-	var radius: float = 18.0
+	var radius: float = 16.0
 	var pulse_time: float = 0.0
 	var is_multiball: bool = true
 
 # ------------------------------------------------------------------------------
-# 3. DEFINIÇÃO DAS 5 FASES DA CAMPANHA
+# 3. DEFINIÇÃO DAS 5 FASES
 # ------------------------------------------------------------------------------
 const STAGE_CONFIGS = [
 	{
 		"stage": 1,
 		"title": "FASE 1: O DESPERTAR",
-		"subtitle": "Destrua 5 alvos na órbita",
-		"target_type": "targets",
+		"subtitle": "Colete moedas e quebre os bloquinhos",
+		"target_type": "intro_blocks",
 		"palette": {
 			"name": "NEON CYAN",
 			"paddle": Color(0.18, 0.92, 1.0),
 			"arena": Color(0.12, 0.28, 0.38, 0.7),
-			"accent": Color(1.0, 0.85, 0.2)
+			"accent": Color(0.2, 0.85, 1.0)
 		}
 	},
 	{
 		"stage": 2,
-		"title": "FASE 2: PRIMEIROS BLOQUEIOS",
-		"subtitle": "Destrua os 2 blocos centrais",
-		"target_type": "blocks_dual",
+		"title": "FASE 2: MATRIZ DE BLOCOS",
+		"subtitle": "Destrua a fileira de blocos quadradinhos",
+		"target_type": "grid_blocks",
 		"palette": {
 			"name": "SYNTH PURPLE",
 			"paddle": Color(0.95, 0.25, 0.88),
@@ -110,7 +109,7 @@ const STAGE_CONFIGS = [
 	{
 		"stage": 3,
 		"title": "FASE 3: PINBALL BUMPERS",
-		"subtitle": "Ricocheteie nos bumpers e destrua o núcleo",
+		"subtitle": "Use os bumpers elásticos para quebrar o miolo",
 		"target_type": "bumpers",
 		"palette": {
 			"name": "ELECTRIC BLUE",
@@ -122,7 +121,7 @@ const STAGE_CONFIGS = [
 	{
 		"stage": 4,
 		"title": "FASE 4: CAOS TRIPLO",
-		"subtitle": "Ative o Multiball e limpe a nuvem de blocos",
+		"subtitle": "Multiball! Quebre o anel de blocos",
 		"target_type": "cloud_multiball",
 		"palette": {
 			"name": "EMERALD LIME",
@@ -134,13 +133,13 @@ const STAGE_CONFIGS = [
 	{
 		"stage": 5,
 		"title": "FASE 5: A HÉLICE",
-		"subtitle": "Vença os reflexos da hélice rotativa",
+		"subtitle": "Destrua todos os blocos sob a hélice rotativa",
 		"target_type": "helix_boss",
 		"palette": {
 			"name": "SOLAR AMBER",
 			"paddle": Color(1.0, 0.8, 0.15),
 			"arena": Color(0.38, 0.26, 0.10, 0.7),
-			"accent": Color(1.0, 0.35, 0.2)
+			"accent": Color(1.0, 0.45, 0.2)
 		}
 	}
 ]
@@ -159,16 +158,16 @@ var is_dragging: bool = false
 # Entidades ativas
 var balls: Array[Ball] = []
 var particles: Array[Particle] = []
-var blocks: Array[Block] = []
-var targets: Array[StaticTarget] = []
+var square_blocks: Array[SquareBlock] = []
+var coins_items: Array[CoinItem] = []
 var bumpers: Array[Bumper] = []
 var helix: HelixObstacle = null
 var active_powerups: Array[PowerupOrb] = []
 
-# Progresso de Campanha
+# Progresso
 var current_stage_idx: int = 0
-var stage_targets_total: int = 0
-var stage_targets_hit: int = 0
+var stage_blocks_total: int = 0
+var stage_blocks_broken: int = 0
 var score: int = 0
 var coins: int = 0
 var screen_shake: float = 0.0
@@ -207,7 +206,6 @@ func _get_current_palette() -> Dictionary:
 func _get_current_config() -> Dictionary:
 	if current_stage_idx < STAGE_CONFIGS.size():
 		return STAGE_CONFIGS[current_stage_idx]
-	# Pós fase 5: Modo Infinito (repete com aceleração)
 	var loop_idx = (current_stage_idx - STAGE_CONFIGS.size()) % STAGE_CONFIGS.size()
 	return STAGE_CONFIGS[loop_idx]
 
@@ -230,99 +228,100 @@ func start_new_campaign() -> void:
 func start_infinite_mode() -> void:
 	victory_panel.visible = false
 	current_state = GameState.PLAYING
-	_load_stage(current_stage_idx) # Continua a partir da fase infinita
+	_load_stage(current_stage_idx)
 
 # ------------------------------------------------------------------------------
-# 6. CARREGAMENTO DAS FASES E OBJETIVOS
+# 6. CARREGAMENTO DAS FASES
 # ------------------------------------------------------------------------------
 func _load_stage(stage_idx: int) -> void:
-	blocks.clear()
-	targets.clear()
+	square_blocks.clear()
+	coins_items.clear()
 	bumpers.clear()
 	helix = null
 	active_powerups.clear()
 	balls.clear()
-	stage_targets_hit = 0
+	stage_blocks_broken = 0
 
 	var cfg = _get_current_config()
 	var palette = cfg["palette"]
+	var blk_size = Vector2(28, 28) # Bloquinhos quadrados do tamanho da moeda!
 
 	match cfg["target_type"]:
-		"targets":
-			# FASE 1: 5 Alvos estáticos para acertar
-			stage_targets_total = 5
-			_spawn_next_phase1_target()
+		"intro_blocks":
+			# FASE 1: 4 bloquinhos quadrados e 3 moedas soltas
+			stage_blocks_total = 4
+			var positions = [Vector2(-60, 0), Vector2(60, 0), Vector2(0, -60), Vector2(0, 60)]
+			for p in positions:
+				_create_square_block(arena_center + p - blk_size / 2.0, blk_size, palette["accent"])
+			# Moedinhas coletáveis no raio intermediário
+			_spawn_coin(arena_center + Vector2(-35, -35))
+			_spawn_coin(arena_center + Vector2(35, 35))
+			_spawn_coin(arena_center + Vector2(35, -35))
 
-		"blocks_dual":
-			# FASE 2: 2 Blocos centrais retangulares
-			stage_targets_total = 2
-			var sz = Vector2(80, 26)
-			_create_block(arena_center + Vector2(-40, -55), sz, 3, palette["accent"])
-			_create_block(arena_center + Vector2(-40, 30), sz, 3, palette["accent"])
+		"grid_blocks":
+			# FASE 2: Matriz 2x3 de bloquinhos no centro + moedas
+			stage_blocks_total = 6
+			for x in [-40, 0, 40]:
+				for y in [-25, 25]:
+					_create_square_block(arena_center + Vector2(x, y) - blk_size / 2.0, blk_size, palette["accent"])
+			_spawn_coin(arena_center + Vector2(0, -70))
+			_spawn_coin(arena_center + Vector2(0, 70))
 
 		"bumpers":
-			# FASE 3: 3 Bumpers elásticos triangulares + 4 blocos de núcleo
-			stage_targets_total = 4
-			# Bumpers circulares elásticos
-			var b_dist = 85.0
-			for i in range(3):
-				var ang = i * (TAU / 3.0) - PI / 2.0
-				var b_pos = arena_center + Vector2.RIGHT.rotated(ang) * b_dist
-				_create_bumper(b_pos, palette["paddle"])
-			# Núcleo de blocos
-			var sz = Vector2(28, 28)
-			_create_block(arena_center + Vector2(-34, -14), sz, 2, palette["accent"])
-			_create_block(arena_center + Vector2(6, -14), sz, 2, palette["accent"])
-			_create_block(arena_center + Vector2(-14, -34), sz, 2, palette["accent"])
-			_create_block(arena_center + Vector2(-14, 6), sz, 2, palette["accent"])
+			# FASE 3: 2 Bumpers elásticos suaves + 6 blocos quadradinhos
+			stage_blocks_total = 6
+			_create_bumper(arena_center + Vector2(-75, 0), palette["paddle"])
+			_create_bumper(arena_center + Vector2(75, 0), palette["paddle"])
+			for i in range(6):
+				var ang = i * (TAU / 6.0)
+				var pos = arena_center + Vector2.RIGHT.rotated(ang) * 55.0 - blk_size / 2.0
+				_create_square_block(pos, blk_size, palette["accent"])
+			_spawn_coin(arena_center)
 
 		"cloud_multiball":
-			# FASE 4: Multiball imediato + Nuvem de 12 blocos
-			stage_targets_total = 12
-			for i in range(12):
-				var ang = i * (TAU / 12.0)
-				var pos = arena_center + Vector2.RIGHT.rotated(ang) * 92.0 - Vector2(16, 16)
-				_create_block(pos, Vector2(32, 32), 2, palette["accent"])
-			# Spawna power-up de Multiball no centro
+			# FASE 4: Multiball imediato + 10 blocos quadradinhos
+			stage_blocks_total = 10
+			for i in range(10):
+				var ang = i * (TAU / 10.0)
+				var pos = arena_center + Vector2.RIGHT.rotated(ang) * 85.0 - blk_size / 2.0
+				_create_square_block(pos, blk_size, palette["accent"])
 			_spawn_powerup(arena_center)
+			_spawn_coin(arena_center + Vector2(-40, 0))
+			_spawn_coin(arena_center + Vector2(40, 0))
 
 		"helix_boss":
-			# FASE 5: Hélice rotativa contínua + 6 geradores de energia
-			stage_targets_total = 6
+			# FASE 5: Hélice rotativa + 8 blocos em órbita
+			stage_blocks_total = 8
 			helix = HelixObstacle.new()
 			helix.center = arena_center
 			helix.color = palette["accent"]
-			# 6 blocos ao redor da órbita interna
-			for i in range(6):
-				var ang = i * (TAU / 6.0)
-				var pos = arena_center + Vector2.RIGHT.rotated(ang) * 115.0 - Vector2(18, 18)
-				_create_block(pos, Vector2(36, 36), 3, palette["paddle"])
+			for i in range(8):
+				var ang = i * (TAU / 8.0)
+				var pos = arena_center + Vector2.RIGHT.rotated(ang) * 115.0 - blk_size / 2.0
+				_create_square_block(pos, blk_size, palette["paddle"])
+			_spawn_coin(arena_center + Vector2(-70, -70))
+			_spawn_coin(arena_center + Vector2(70, 70))
 
-	# Spawna a Bolinha inicial com velocidade base calibrada
-	var speed = ball_base_speed + (stage_idx * 16.0)
-	_spawn_ball(arena_center, randf_range(0.0, TAU), speed)
+	# Spawna a bola inicial com velocidade amigável
+	var spd = ball_base_speed + (stage_idx * 14.0)
+	_spawn_ball(arena_center, randf_range(0.0, TAU), spd)
 
-	# Atualiza HUD e Banner
 	wave_label.text = cfg["title"]
 	wave_label.add_theme_color_override("font_color", palette["paddle"])
 	_update_objective_label()
 	_show_wave_banner(cfg["title"])
 	_update_hud()
 
-func _spawn_next_phase1_target() -> void:
-	if targets.size() == 0 and stage_targets_hit < stage_targets_total:
-		var t = StaticTarget.new()
-		var dist = randf_range(70.0, arena_radius * 0.55)
-		t.pos = arena_center + Vector2.RIGHT.rotated(randf() * TAU) * dist
-		targets.append(t)
-
-func _create_block(pos: Vector2, size: Vector2, hp: int, col: Color) -> void:
-	var b = Block.new()
-	b.rect = Rect2(pos, size)
-	b.hp = hp
-	b.max_hp = hp
+func _create_square_block(top_left: Vector2, size: Vector2, col: Color) -> void:
+	var b = SquareBlock.new()
+	b.rect = Rect2(top_left, size)
 	b.color = col
-	blocks.append(b)
+	square_blocks.append(b)
+
+func _spawn_coin(pos: Vector2) -> void:
+	var c = CoinItem.new()
+	c.pos = pos
+	coins_items.append(c)
 
 func _create_bumper(pos: Vector2, col: Color) -> void:
 	var bmp = Bumper.new()
@@ -353,12 +352,12 @@ func _show_wave_banner(text: String) -> void:
 	tween.tween_callback(func(): wave_banner.visible = false)
 
 func _update_objective_label() -> void:
-	var remaining = stage_targets_total - stage_targets_hit
+	var remaining = stage_blocks_total - stage_blocks_broken
 	var cfg = _get_current_config()
 	objective_label.text = "%s (%d restantes)" % [cfg["subtitle"], remaining]
 
 # ------------------------------------------------------------------------------
-# 7. ENTRADAS DE DADOS
+# 7. ENTRADAS DE DADOS (CONTROLE FLUIDO)
 # ------------------------------------------------------------------------------
 func _unhandled_input(event: InputEvent) -> void:
 	if current_state != GameState.PLAYING:
@@ -374,7 +373,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		is_dragging = event.pressed
 		if event.pressed:
 			_aim_at(event.position)
-	elif event is InputEventMouseMotion and is_dragging:
+	elif event is InputEventMouseMotion:
+		# No PC, o mouse direciona diretamente a raquete sem depender de segurar o clique
 		_aim_at(event.position)
 
 func _aim_at(screen_pos: Vector2) -> void:
@@ -396,12 +396,16 @@ func _physics_process(delta: float) -> void:
 	_process_balls(delta)
 	_process_particles(delta)
 	_process_powerups(delta)
+	_process_coins_animation(delta)
 
-	# Checagem de Conclusão da Fase
-	if stage_targets_hit >= stage_targets_total:
+	if stage_blocks_broken >= stage_blocks_total:
 		_complete_current_stage()
 
 	queue_redraw()
+
+func _process_coins_animation(delta: float) -> void:
+	for c in coins_items:
+		c.pulse += delta * 4.0
 
 func _process_screen_shake(delta: float) -> void:
 	if screen_shake > 0.0:
@@ -416,6 +420,7 @@ func _process_paddle(delta: float) -> void:
 		target_paddle_angle = wrapf(target_paddle_angle, -PI, PI)
 
 	var diff = angle_difference(paddle_angle, target_paddle_angle)
+	# Resposta rápida e suave sem atraso perceptível
 	paddle_angle += diff * clampf(paddle_smoothness * delta, 0.0, 1.0)
 	paddle_angle = wrapf(paddle_angle, -PI, PI)
 
@@ -437,7 +442,6 @@ func _process_balls(delta: float) -> void:
 	for i in range(balls.size() - 1, -1, -1):
 		var b = balls[i]
 
-		# Rastro
 		b.trail.push_front(b.pos)
 		if b.trail.size() > max_trail_points:
 			b.trail.pop_back()
@@ -445,7 +449,7 @@ func _process_balls(delta: float) -> void:
 		b.pos += b.vel * delta
 		var dist_center = b.pos.distance_to(arena_center)
 
-		# Colisão com o perímetro circular
+		# Colisão com a borda circular
 		if dist_center >= boundary_limit:
 			var outward_normal = (b.pos - arena_center).normalized()
 			var impact_angle = outward_normal.angle()
@@ -459,7 +463,7 @@ func _process_balls(delta: float) -> void:
 
 				var contact_ratio = angle_difference(paddle_angle, impact_angle) / half_arc
 				var tangent = Vector2(-outward_normal.y, outward_normal.x)
-				b.vel = (b.vel + tangent * contact_ratio * (b.speed * 0.4)).normalized() * b.speed
+				b.vel = (b.vel + tangent * contact_ratio * (b.speed * 0.35)).normalized() * b.speed
 
 				if b.vel.dot(outward_normal) > 0.0:
 					b.vel = b.vel.bounce(inward_normal)
@@ -470,71 +474,74 @@ func _process_balls(delta: float) -> void:
 
 				score += 1
 				_update_hud()
-				_add_shake(3.0)
+				_add_shake(2.5)
 				_trigger_firework(b.pos, palette["paddle"], 12)
 
 			else:
-				# Bolinha perdida
+				# Bola perdida
 				_trigger_firework(b.pos, Color(1.0, 0.2, 0.3), 16)
 				balls.remove_at(i)
 				continue
 
-		# Colisões com Obstáculos e Alvos
-		_check_ball_targets_collision(b)
-		_check_ball_blocks_collision(b)
+		# 1. MOEDAS SÃO COLETADAS (PASS-THROUGH, NÃO DESVIAM A BOLA!)
+		_check_ball_coins_pickup(b)
+
+		# 2. BLOCOS QUADRADINHOS (RICOCHETE ORTOGONAL PREVISÍVEL)
+		_check_ball_square_blocks_collision(b)
+
+		# 3. BUMPERS E HÉLICE
 		_check_ball_bumpers_collision(b)
 		_check_ball_helix_collision(b)
 
-	# Se todas as bolinhas caírem -> Game Over
 	if balls.is_empty():
 		_trigger_game_over()
 
-func _check_ball_targets_collision(b: Ball) -> void:
-	for i in range(targets.size() - 1, -1, -1):
-		var t = targets[i]
-		if b.pos.distance_to(t.pos) <= ball_radius + t.radius:
-			var normal = (b.pos - t.pos).normalized()
-			b.vel = b.vel.bounce(normal)
-			targets.remove_at(i)
-			stage_targets_hit += 1
-			score += 20
+# ------------------------------------------------------------------------------
+# COLETA DE MOEDAS: PASS-THROUGH (SEM DESVIO BRUSCO)
+# ------------------------------------------------------------------------------
+func _check_ball_coins_pickup(b: Ball) -> void:
+	for i in range(coins_items.size() - 1, -1, -1):
+		var coin = coins_items[i]
+		if b.pos.distance_to(coin.pos) <= ball_radius + coin.radius:
+			# Coletou! A bola segue seu caminho normalmente sem ser repelida
 			coins += 1
-			_add_shake(4.5)
-			_trigger_firework(t.pos, Color(1.0, 0.85, 0.2), 24)
+			score += 15
+			_trigger_firework(coin.pos, Color(1.0, 0.85, 0.15), 18)
+			coins_items.remove_at(i)
 			_update_hud()
+
+# ------------------------------------------------------------------------------
+# COLISÃO COM BLOCOS QUADRADINHOS: RICOCHETE ORTOGONAL (PREVISÍVEL)
+# ------------------------------------------------------------------------------
+func _check_ball_square_blocks_collision(b: Ball) -> void:
+	for i in range(square_blocks.size() - 1, -1, -1):
+		var blk = square_blocks[i]
+		var blk_center = blk.rect.get_center()
+		var half_sz = blk.rect.size / 2.0
+		var diff = b.pos - blk_center
+
+		# Cálculo de sobreposição em AABB
+		var overlap_x = (half_sz.x + ball_radius) - absf(diff.x)
+		var overlap_y = (half_sz.y + ball_radius) - absf(diff.y)
+
+		if overlap_x > 0.0 and overlap_y > 0.0:
+			# Determina se a colisão foi horizontal ou vertical
+			if overlap_x < overlap_y:
+				# Bateu pelas laterais (esquerda/direita) -> Inverte X
+				b.vel.x = -b.vel.x
+				b.pos.x = blk_center.x + (half_sz.x + ball_radius + 1.0) * signf(diff.x)
+			else:
+				# Bateu por cima ou por baixo -> Inverte Y
+				b.vel.y = -b.vel.y
+				b.pos.y = blk_center.y + (half_sz.y + ball_radius + 1.0) * signf(diff.y)
+
+			# Quebra o bloquinho
+			square_blocks.remove_at(i)
+			stage_blocks_broken += 1
+			score += 20
+			_add_shake(3.5)
+			_trigger_firework(blk_center, blk.color, 16)
 			_update_objective_label()
-			_spawn_next_phase1_target()
-
-func _check_ball_blocks_collision(b: Ball) -> void:
-	for i in range(blocks.size() - 1, -1, -1):
-		var blk = blocks[i]
-		var closest_x = clampf(b.pos.x, blk.rect.position.x, blk.rect.end.x)
-		var closest_y = clampf(b.pos.y, blk.rect.position.y, blk.rect.end.y)
-		var closest_point = Vector2(closest_x, closest_y)
-		var dist = b.pos.distance_to(closest_point)
-
-		if dist <= ball_radius:
-			var normal = (b.pos - closest_point).normalized()
-			if normal.is_zero_approx():
-				normal = (b.pos - blk.rect.get_center()).normalized()
-				if normal.is_zero_approx():
-					normal = Vector2.UP
-
-			b.vel = b.vel.bounce(normal)
-			b.pos = closest_point + normal * (ball_radius + 1.0)
-
-			blk.hp -= 1
-			_add_shake(4.0)
-			_trigger_firework(closest_point, blk.color, 14)
-
-			if blk.hp <= 0:
-				blocks.remove_at(i)
-				stage_targets_hit += 1
-				score += 25
-				coins += 1
-				_trigger_firework(blk.rect.get_center(), Color(1.0, 0.9, 0.2), 26)
-				_update_objective_label()
-
 			_update_hud()
 			break
 
@@ -544,14 +551,11 @@ func _check_ball_bumpers_collision(b: Ball) -> void:
 		if dist <= ball_radius + bmp.radius:
 			var normal = (b.pos - bmp.pos).normalized()
 			b.vel = b.vel.bounce(normal)
-			# Impulso elástico extra (+20% de aceleração temporária até 650)
-			b.speed = minf(b.speed * 1.15, 650.0)
-			b.vel = b.vel.normalized() * b.speed
 			b.pos = bmp.pos + normal * (bmp.radius + ball_radius + 2.0)
 
-			bmp.impulse_scale = 1.35 # Animação elástica de mola
-			_add_shake(5.5)
-			_trigger_firework(bmp.pos + normal * bmp.radius, bmp.color, 18)
+			bmp.impulse_scale = 1.25
+			_add_shake(4.0)
+			_trigger_firework(bmp.pos + normal * bmp.radius, bmp.color, 16)
 			score += 5
 			_update_hud()
 
@@ -559,7 +563,6 @@ func _check_ball_helix_collision(b: Ball) -> void:
 	if helix == null:
 		return
 
-	# Transforma a posição da bolinha para o espaço local da hélice
 	var rel_pos = b.pos - helix.center
 	var local_pos = rel_pos.rotated(-helix.angle)
 	var half_len = helix.length / 2.0
@@ -576,14 +579,13 @@ func _check_ball_helix_collision(b: Ball) -> void:
 			local_normal = Vector2.UP
 
 		var world_normal = local_normal.rotated(helix.angle)
-		# Momento angular transferido para a bolinha
 		var surface_tangent = Vector2(-rel_pos.y, rel_pos.x) * helix.rot_speed
-		
-		b.vel = b.vel.bounce(world_normal) + surface_tangent * 0.4
+
+		b.vel = b.vel.bounce(world_normal) + surface_tangent * 0.3
 		b.vel = b.vel.normalized() * b.speed
 		b.pos = helix.center + (local_closest + local_normal * (ball_radius + 2.0)).rotated(helix.angle)
 
-		_add_shake(5.0)
+		_add_shake(4.5)
 		_trigger_firework(b.pos, helix.color, 16)
 
 func _process_powerups(delta: float) -> void:
@@ -594,8 +596,8 @@ func _process_powerups(delta: float) -> void:
 		for b in balls:
 			if b.pos.distance_to(p.pos) <= ball_radius + p.radius:
 				_activate_multiball(p.pos, b.vel)
-				_trigger_firework(p.pos, Color(1.0, 0.85, 0.2), 35)
-				_add_shake(6.0)
+				_trigger_firework(p.pos, Color(1.0, 0.85, 0.2), 30)
+				_add_shake(5.0)
 				coins += 3
 				score += 30
 				_update_hud()
@@ -605,16 +607,15 @@ func _process_powerups(delta: float) -> void:
 func _activate_multiball(origin: Vector2, base_vel: Vector2) -> void:
 	var base_ang = base_vel.angle()
 	var spd = base_vel.length()
-	_spawn_ball(origin, base_ang + deg_to_rad(35.0), spd)
-	_spawn_ball(origin, base_ang - deg_to_rad(35.0), spd)
+	_spawn_ball(origin, base_ang + deg_to_rad(30.0), spd)
+	_spawn_ball(origin, base_ang - deg_to_rad(30.0), spd)
 
 func _complete_current_stage() -> void:
 	score += 150
 	coins += 5
-	_trigger_firework(arena_center, Color(0.2, 1.0, 0.6), 50)
-	
+	_trigger_firework(arena_center, Color(0.2, 1.0, 0.6), 45)
+
 	if current_stage_idx == 4:
-		# Concluiu a Fase 5 (Vitória na Campanha!)
 		current_state = GameState.CAMPAIGN_CLEAR
 		total_score_label.text = "Pontuação: %d  |  Moedas: %d" % [score, coins]
 		victory_panel.visible = true
@@ -624,19 +625,19 @@ func _complete_current_stage() -> void:
 		_load_stage(current_stage_idx)
 
 # ------------------------------------------------------------------------------
-# 9. SISTEMA DE PARTÍCULAS PROCEDURAIS
+# 9. SISTEMA DE PARTÍCULAS
 # ------------------------------------------------------------------------------
 func _trigger_firework(origin: Vector2, col: Color, count: int) -> void:
 	for i in range(count):
 		var p = Particle.new()
 		p.pos = origin
 		var ang = randf_range(0.0, TAU)
-		var spd = randf_range(90.0, 270.0)
+		var spd = randf_range(80.0, 240.0)
 		p.vel = Vector2.RIGHT.rotated(ang) * spd
 		p.color = col.lightened(randf_range(0.0, 0.4))
-		p.max_life = randf_range(0.35, 0.65)
+		p.max_life = randf_range(0.3, 0.55)
 		p.life = p.max_life
-		p.size = randf_range(2.5, 4.5)
+		p.size = randf_range(2.5, 4.0)
 		particles.append(p)
 
 func _process_particles(delta: float) -> void:
@@ -671,7 +672,6 @@ func _draw() -> void:
 	if helix != null:
 		var h_center = helix.center + shake_offset
 		var h_dir = Vector2.RIGHT.rotated(helix.angle)
-		var h_norm = Vector2(-h_dir.y, h_dir.x)
 		var p_start = h_center - h_dir * (helix.length / 2.0)
 		var p_end = h_center + h_dir * (helix.length / 2.0)
 		draw_line(p_start, p_end, helix.color, helix.thickness, true)
@@ -679,27 +679,29 @@ func _draw() -> void:
 		draw_circle(p_end, helix.thickness / 2.0, helix.color)
 		draw_circle(h_center, helix.thickness * 0.7, Color.WHITE)
 
-	# 3. Bumpers Elásticos de Pinball (Fase 3)
+	# 3. Bumpers Elásticos (Fase 3)
 	for bmp in bumpers:
 		var b_pos = bmp.pos + shake_offset
 		draw_circle(b_pos, bmp.radius, bmp.color.darkened(0.3))
-		draw_arc(b_pos, bmp.radius, 0.0, TAU, 32, Color.WHITE, 3.0, true)
-		draw_circle(b_pos, bmp.radius * 0.45, Color.WHITE)
+		draw_arc(b_pos, bmp.radius, 0.0, TAU, 32, Color.WHITE, 2.5, true)
+		draw_circle(b_pos, bmp.radius * 0.4, Color.WHITE)
 
-	# 4. Alvos Estáticos da Fase 1
-	for t in targets:
-		var t_pos = t.pos + shake_offset
-		draw_circle(t_pos, t.radius, t.color)
-		draw_arc(t_pos, t.radius, 0.0, TAU, 24, Color.WHITE, 2.0, true)
+	# 4. Moedas Coletáveis (Douradas com Brilho Suave)
+	for c in coins_items:
+		var c_pos = c.pos + shake_offset
+		var scale_p = 1.0 + 0.12 * sin(c.pulse)
+		# Borda dourada
+		draw_circle(c_pos, c.radius * scale_p, Color(1.0, 0.85, 0.2))
+		# Interior
+		draw_circle(c_pos, c.radius * 0.75 * scale_p, Color(1.0, 0.95, 0.4))
+		# Símbolo cifrão/traço no meio
+		draw_line(c_pos + Vector2(0, -5), c_pos + Vector2(0, 5), Color(0.65, 0.45, 0.0), 2.0)
 
-	# 5. Blocos Centrais (com durabilidade)
-	for blk in blocks:
+	# 5. Blocos Quadradinhos Quebráveis (Visual Limpo e Elegante)
+	for blk in square_blocks:
 		var r_off = Rect2(blk.rect.position + shake_offset, blk.rect.size)
-		var fill_col = blk.color
-		if blk.hp < blk.max_hp:
-			fill_col = fill_col.darkened(0.35)
-		draw_rect(r_off, fill_col)
-		draw_rect(r_off, Color.WHITE.lerp(fill_col, 0.3), false, 2.0)
+		draw_rect(r_off, blk.color)
+		draw_rect(r_off, Color.WHITE.lerp(blk.color, 0.4), false, 2.0)
 
 	# 6. Orbe de Multiball
 	for p in active_powerups:
@@ -716,7 +718,7 @@ func _draw() -> void:
 	var start_ang = paddle_angle - half_arc
 	var end_ang = paddle_angle + half_arc
 	var p_color = palette["paddle"]
-	draw_arc(center, arena_radius, start_ang, end_ang, 40, p_color, paddle_thickness, true)
+	draw_arc(center, arena_radius, start_ang, end_ang, 42, p_color, paddle_thickness, true)
 	var cap_radius = paddle_thickness / 2.0
 	draw_circle(center + Vector2.RIGHT.rotated(start_ang) * arena_radius, cap_radius, p_color)
 	draw_circle(center + Vector2.RIGHT.rotated(end_ang) * arena_radius, cap_radius, p_color)
