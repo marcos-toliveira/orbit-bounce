@@ -11,3 +11,5 @@ mono_crash.*.json
 .DS_Store
 Thumbs.db
 *.tmp
+build/
+*.uid
