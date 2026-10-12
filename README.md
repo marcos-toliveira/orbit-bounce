@@ -44,9 +44,24 @@ Desenvolvido com física vetorial matemática precisa e renderização gráfica 
   - 🔥 **Bola de Fogo (Fireball):** Rastro incandescente, destrói blocos instantaneamente sem ricochetear e elimina a torre central em 1 golpe!
   - 🟡 **Multiball (3 Bolinhas):** Multiplica a bola em 3 trajetórias divergentes simultâneas.
 - **Áudio 8-Bit Síntese Procedural:** Gerador de ondas de áudio PCM em tempo real via código GDScript (`AudioStreamWAV`), dispensando arquivos `.wav`/`.mp3` externos.
+- **Sistema de Vidas (Candy Crush Style) & Timer de Recarga:**
+  - Máximo de 5 vidas (`❤️ 5/5`). Vencer a fase não gasta vidas!
+  - Ao ser eliminado, perde 1 vida, mas **não volta à Fase 1**.
+  - Recarga automática a cada 3 minutos, com timer visível em tempo real.
+  - As moedas ganhas nas partidas são permanentemente salvas no banco e podem ser usadas para recarregar +5 vidas ou comprar cosméticos.
+- **Tela de Mapa de Fases (Level Progression Map):**
+  - Navegue e jogue qualquer fase já desbloqueada para bater recordes.
+  - Avaliação de desempenho por estrelas (⭐ / ⭐⭐ / ⭐⭐⭐) em cada fase.
+  - Modo Infinito ♾️ liberado após zerar a Campanha.
+- **HUD Centralizado e Números Flutuantes (Score Popups):**
+  - Placar gigante posicionado estrategicamente logo acima da arena circular, facilitando a visualização durante o calor da partida.
+  - Efeitos de texto flutuante em tempo real (`+25`, `+15 🪙`, `+150 💥`, `MULTIBALL! 🟡`) que saltam da posição exata do impacto.
+- **Interface Oposta a Sobreposições & Telas Escuras Sólidas:**
+  - Modais com fundo escuro sólido opaco, bordas neon e botões touch ergonômicos de 54px+.
+  - Fim de Jogo com destaque gigante para a pontuação conquistada na rodada e opções claras de reviver ou tentar novamente.
 - **Economia, Loja de Skins e Persistência:**
   - Salva automaticamente o seu Recorde Pessoal (*High Score*) e saldo de moedas no banco (`user://orbit_bounce_save.json`).
-  - **Loja de Cosméticos:** Desbloqueie e equipe skins exclusivas de rastro luminoso (Clássico, Chama Solar 🔥, Synthwave Neon 💖 e Arco-Íris Mágico 🌈).
+  - **Loja de Cosméticos & Recargas:** Desbloqueie skins luminosas (Clássico, Chama Solar 🔥, Synthwave Neon 💖 e Arco-Íris Mágico 🌈) e recarregue vidas com moedas.
   - **Loop de Recompensa:** Botão para reviver partida (1x por run com barreira protetora esmeralda) e dobrar moedas coletadas.
 
 ---
