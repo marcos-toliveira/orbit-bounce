@@ -524,14 +524,13 @@ func _physics_process(delta: float) -> void:
 	queue_redraw()
 
 func _process_modifiers(delta: float) -> void:
-	# Duração dos Buffs/Debuffs da raquete
 	if paddle_buff_timer > 0.0:
 		paddle_buff_timer -= delta
 		if paddle_buff_timer <= 0.0:
+			if paddle_buff_type == "expand" or paddle_buff_type == "poison":
+				paddle_arc_current = paddle_base_arc_degrees
 			paddle_buff_type = "normal"
-			paddle_arc_current = paddle_base_arc_degrees
 
-	# Atordoamento por tiro da torre
 	if paddle_stun_timer > 0.0:
 		paddle_stun_timer -= delta
 
@@ -565,10 +564,14 @@ func _process_turret(delta: float) -> void:
 			var half_arc = deg_to_rad(paddle_arc_current / 2.0)
 
 			if diff <= half_arc:
-				# ACERTOU A RAQUETE! Atordoa o jogador
-				paddle_stun_timer = 0.75
-				_add_shake(6.0)
-				_trigger_firework(tb.pos, Color(1.0, 0.1, 0.1), 20)
+				# TIRO DA TORRE ACERTOU A RAQUETE:
+				# Em vez de matar, diminui o tamanho da barra progressivamente!
+				paddle_arc_current = maxf(paddle_arc_current - 14.0, 14.0)
+				paddle_buff_type = "hit"
+				paddle_buff_timer = 0.4 # Pisca em vermelho
+				paddle_stun_timer = 0.3
+				_add_shake(5.5)
+				_trigger_firework(tb.pos, Color(1.0, 0.2, 0.2), 24)
 				_play_sfx(sfx_poison)
 				turret_bullets.remove_at(i)
 				continue
@@ -617,11 +620,15 @@ func _update_objective_and_progress() -> void:
 
 	var buff_indicator = ""
 	if paddle_buff_type == "expand":
-		buff_indicator = " [RAQUETE GIGANTE!]"
+		buff_indicator = " [RAQUETE GIGANTE! 🟢]"
 	elif paddle_buff_type == "poison":
-		buff_indicator = " [VENENO MINI!]"
+		buff_indicator = " [VENENO MINI! 🟣]"
+	elif paddle_arc_current <= 16.0:
+		buff_indicator = " [RAQUETE MÍNIMA! 💀]"
+	elif paddle_arc_current <= 28.0:
+		buff_indicator = " [RAQUETE CRÍTICA! ⚠️]"
 	elif paddle_stun_timer > 0.0:
-		buff_indicator = " [ATORDOADO!]"
+		buff_indicator = " [ATORDOADO! ⚡]"
 
 	objective_label.text = "Meta: %d PONTOS (%d/%d)%s" % [target_s, score, target_s, buff_indicator]
 
@@ -1017,12 +1024,14 @@ func _draw() -> void:
 	var end_ang = paddle_angle + half_arc
 	
 	var p_color = palette["paddle"]
-	if paddle_buff_type == "expand":
+	if paddle_buff_type == "hit" or paddle_stun_timer > 0.0:
+		p_color = Color(1.0, 0.2, 0.2)   # Vermelho de dano ao tomar tiro da torre
+	elif paddle_buff_type == "expand":
 		p_color = Color(0.2, 1.0, 0.4)   # Verde brilhante quando gigante
 	elif paddle_buff_type == "poison":
 		p_color = Color(0.85, 0.2, 0.95) # Roxo venenoso quando encolhida
-	elif paddle_stun_timer > 0.0:
-		p_color = Color(1.0, 0.2, 0.2)   # Vermelho piscando quando atordoada
+	elif paddle_arc_current <= 24.0:
+		p_color = Color(1.0, 0.35, 0.2)  # Alerta: raquete em tamanho crítico!
 
 	draw_arc(center, arena_radius, start_ang, end_ang, 44, p_color, paddle_thickness, true)
 	var cap_radius = paddle_thickness / 2.0
